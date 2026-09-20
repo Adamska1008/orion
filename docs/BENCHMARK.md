@@ -2,6 +2,18 @@
 
 通过标准 `cargo bench` 直接运行扫描核心，不启动 Server 或 GUI，不需要 PowerShell / Node 启动脚本。用于验证扫描改动的性能及结果一致性。
 
+2026-09-21 模块拆分后，扫描报告 schema 升为 4：`core_source_sha256` 覆盖 lib/model/index/scan/query/legacy_scan/scanner 各源码的有序、带长度拼接，`parallel_source_sha256` 指向新位置 `scanner/parallel.rs`。旧报告保留原 schema。历史串行算法保留，额外维护目录缓存版本，故新报告也不能直接作为与旧二进制的严格前后性能比较。
+
+## 目录查询基准
+
+```powershell
+cargo bench -p orion-core --features bench-internals --bench query
+```
+
+该入口生成 1 万、10 万条目的合成内存索引（只创建临时根目录，不创建对应数量的磁盘文件），以每页 50 项、40 对交替顺序请求比较原全量复制/排序与缓存命中。每对都比较完整 JSON；首次缓存查询单独记录。随后另测批量写入期间的查询，并记录发布结束后的取消调用耗时。JSON 输出包含原始时间样本、环境和源码指纹；可重定向 stdout 保存报告。
+
+本次报告见 [query-cache.json](benchmarks/2026-09-21/query-cache.json)：10 万条目的未缓存查询 p50 为 20.1951 ms，缓存命中 p50 为 0.0188 ms，首次查询为 22.3066 ms。变化中的目录仍可能反复未命中；并发阶段样本数较少，只作诊断，不与稳定索引的缓存命中混为一谈。缓存有 32 个目录和 100 万 ID 的容量上限，但这里没有实测进程峰值内存。该基准不包含文件系统枚举、HTTP 或渲染。
+
 ## 运行
 
 在项目根目录执行：

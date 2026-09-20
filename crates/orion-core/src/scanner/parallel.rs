@@ -1,7 +1,10 @@
-use super::{is_link, modified, Entry, Kind, Scan, ScanIssue, Status};
+use super::{
+    filesystem::{is_link, modified},
+    Batch, Directory, Discovered,
+};
+use crate::{Kind, Scan, Status};
 use std::{
     collections::VecDeque,
-    ffi::OsString,
     fs,
     panic::{catch_unwind, AssertUnwindSafe},
     path::PathBuf,
@@ -13,11 +16,6 @@ use std::{
 };
 
 const BATCH_SIZE: usize = 256;
-
-struct Directory {
-    path: PathBuf,
-    id: usize,
-}
 
 struct Work {
     pending: VecDeque<Directory>,
@@ -90,36 +88,8 @@ impl Queue {
     }
 }
 
-struct Discovered {
-    name: OsString,
-    kind: Kind,
-    bytes: u64,
-    modified: Option<u64>,
-    directory_path: Option<PathBuf>,
-}
-
-#[derive(Default)]
-struct Batch {
-    entries: Vec<Discovered>,
-    issues: Vec<ScanIssue>,
-}
-
-impl Batch {
-    fn len(&self) -> usize {
-        self.entries.len() + self.issues.len()
-    }
-
-    fn issue(&mut self, path: &std::path::Path, code: &str, message: String) {
-        self.issues.push(ScanIssue {
-            path: path.to_string_lossy().into(),
-            code: code.into(),
-            message,
-        });
-    }
-}
-
 impl Scan {
-    pub(super) fn run_parallel(&self, workers: usize) {
+    pub(crate) fn run_parallel(&self, workers: usize) {
         self.run_pool(workers, &|_| {});
     }
 
@@ -264,43 +234,7 @@ impl Scan {
         enumerated: Option<bool>,
         queue: &Queue,
     ) {
-        let mut directories = Vec::new();
-        {
-            let mut index = self.index.write().unwrap();
-            let mut bytes = 0u64;
-            index.entries.reserve(batch.entries.len());
-            for discovered in batch.entries.drain(..) {
-                let id = index.entries.len();
-                if let Some(path) = discovered.directory_path {
-                    directories.push(Directory { path, id });
-                }
-                index.files += u64::from(discovered.kind == Kind::File);
-                index.directories += u64::from(discovered.kind == Kind::Directory);
-                bytes = bytes.saturating_add(discovered.bytes);
-                index.entries.push(Entry {
-                    parent: Some(parent),
-                    name: discovered.name,
-                    kind: discovered.kind,
-                    bytes: discovered.bytes,
-                    modified: discovered.modified,
-                    enumerated: discovered.kind == Kind::File,
-                    children: vec![],
-                });
-                index.entries[parent].children.push(id);
-            }
-            let mut ancestor = Some(parent);
-            while let Some(id) = ancestor {
-                index.entries[id].bytes = index.entries[id].bytes.saturating_add(bytes);
-                ancestor = index.entries[id].parent;
-            }
-            for issue in batch.issues.drain(..) {
-                index.record_issue(issue);
-            }
-            if let Some(enumerated) = enumerated {
-                index.entries[parent].enumerated = enumerated;
-            }
-            index.revision += 1;
-        }
+        let directories = self.commit_batch(parent, batch, enumerated);
         // Never acquire the work queue while holding the index lock.
         queue.publish(directories, self);
     }

@@ -50,7 +50,7 @@ beforeEach(async () => {
   vi.useFakeTimers();
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   HTMLElement.prototype.scrollTo = vi.fn();
-  vi.spyOn(Api.prototype, 'health').mockResolvedValue({ name: 'orion-server', api_version: 1, instance_id: 'server' });
+  vi.spyOn(Api.prototype, 'health').mockResolvedValue({ name: 'orion-server', api_version: 1, version: 'test', capabilities: ['graceful_shutdown'], instance_id: 'server' });
   vi.spyOn(Api.prototype, 'tasks').mockImplementation(async () => [{ ...task }]);
   vi.spyOn(Api.prototype, 'page').mockImplementation(async (_id, parent, offset, limit) =>
     parent === 1 ? childPage : { ...rootPage, offset, entries: rootEntries.slice(offset, offset + limit) });

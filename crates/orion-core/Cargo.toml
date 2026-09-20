@@ -21,3 +21,8 @@ sha2 = "0.10"
 name = "scan"
 harness = false
 required-features = ["bench-internals"]
+
+[[bench]]
+name = "query"
+harness = false
+required-features = ["bench-internals"]

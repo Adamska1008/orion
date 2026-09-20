@@ -94,9 +94,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let pending = connection.with_extension("pending");
     fs::write(
         &pending,
-        serde_json::to_vec(
-            &serde_json::json!({"url":url,"token":token,"instance_id":state.instance_id}),
-        )?,
+        serde_json::to_vec(&orion_server::ConnectionDocument {
+            url: url.clone(),
+            token,
+            instance_id: state.instance_id,
+        })?,
     )?;
     fs::rename(&pending, &connection)?;
     println!("Orion Server listening at {url}");

@@ -1,6 +1,6 @@
 [workspace]
-members = ["crates/orion-core", "crates/orion-server", "apps/desktop/src-tauri"]
-default-members = ["crates/orion-core", "crates/orion-server"]
+members = ["crates/orion-core", "crates/orion-server", "crates/orion-runtime", "apps/desktop/src-tauri"]
+default-members = ["crates/orion-core", "crates/orion-server", "crates/orion-runtime"]
 resolver = "2"
 
 [workspace.package]

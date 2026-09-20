@@ -1,200 +1,39 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { useVirtualizer } from '@tanstack/react-virtual';
-import { isTauri, invoke } from '@tauri-apps/api/core';
-import { open } from '@tauri-apps/plugin-dialog';
-import { revealItemInDir } from '@tauri-apps/plugin-opener';
-import { ArrowDown, ArrowLeft, ArrowRight, Check, ChevronRight, Copy, File, Folder, FolderOpen, Info, LoaderCircle, Moon, Plug, RefreshCw, ScanLine, Settings2, ShieldCheck, Square, TriangleAlert, X } from 'lucide-react';
-import { Api, ApiError, validateConnection, type Connection, type Detail, type Entry, type Page, type Task } from './lib/api';
-import { cn, displayPath, formatBytes, formatDate } from './lib/utils';
+import { useEffect, useState } from 'react';
+import { ArrowRight, Check, FolderOpen, Info, LoaderCircle, Moon, Plug, RefreshCw, ScanLine, Settings2, ShieldCheck, Square, TriangleAlert, X } from 'lucide-react';
+import { desktop, errorText } from './lib/desktop';
+import { cn, displayPath, formatBytes } from './lib/utils';
 import { useTheme, type ThemePreference } from './lib/theme';
 import { Button } from './components/ui/button';
+import { useServerSession } from './features/session/useServerSession';
+import { active, useScanTask } from './features/scan/useScanTask';
+import { DirectoryExplorer } from './features/explorer/DirectoryExplorer';
 
-const labels = { running: '正在扫描', cancelling: '正在取消', cancelled: '已取消 · 部分结果', completed: '扫描完成', failed: '扫描失败' };
-const emptyPage: Page = { revision: 0, total: 0, offset: 0, entries: [] };
-const active = (task: Task | null) => task?.status === 'running' || task?.status === 'cancelling';
-const errorText = (error: unknown) => error instanceof Error ? error.message : typeof error === 'string' ? error : '操作失败，请重试。';
-
-function EntryIcon({ entry }: { entry: Entry }) {
-  return entry.kind === 'directory' ? <Folder className="entry-icon folder-icon" /> : <File className="entry-icon file-icon" />;
-}
+const labels = { running: '正在扫描', cancelling: '正在取消', cancelled: '已取消 · 部分结果', completed: '扫描完成', failed: '扫描失败', unknown: '未知任务状态' };
 
 export default function App() {
   const [theme, setTheme] = useTheme();
-  const [connection, setConnection] = useState<Connection | null>(null);
+  const session = useServerSession();
+  const { api, connecting, connectDesktop } = session;
+  const scan = useScanTask(api);
+  const { task, online, busy, message, setMessage, notice, setNotice, cancel } = scan;
+  const connectionError = session.error || scan.connectionError;
+  const [settings, setSettings] = useState(!desktop.available());
   const [connectionForm, setConnectionForm] = useState({ url: 'http://127.0.0.1:', token: '' });
-  const [settings, setSettings] = useState(false);
-  const [online, setOnline] = useState(false);
-  const [connectionError, setConnectionError] = useState('');
-  const [connecting, setConnecting] = useState(isTauri());
-  const [message, setMessage] = useState('');
-  const [notice, setNotice] = useState('');
-  const [task, setTask] = useState<Task | null>(null);
   const [root, setRoot] = useState('');
-  const [parent, setParent] = useState(0);
-  const [offset, setOffset] = useState(0);
-  const [pageSize, setPageSize] = useState(15);
-  const [page, setPage] = useState<Page>(emptyPage);
-  const [directory, setDirectory] = useState<Detail | null>(null);
-  const [selected, setSelected] = useState<number | null>(null);
-  const [detail, setDetail] = useState<Detail | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [loadingPage, setLoadingPage] = useState(false);
-  const [showIssues, setShowIssues] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const instanceRef = useRef<string | null>(null);
-  const requestRef = useRef<{ root: string; id: string } | null>(null);
-  const listRef = useRef<HTMLDivElement>(null);
-  const api = useMemo(() => connection ? new Api(connection) : null, [connection]);
-  const virtual = useVirtualizer({ count: page.entries.length, getScrollElement: () => listRef.current, estimateSize: () => 48, overscan: 8 });
-
-  const connectDesktop = useCallback(async () => {
-    setConnecting(true); setConnectionError(''); setMessage('');
-    try {
-      setConnection(validateConnection(await invoke<Connection>('server_connection')));
-      setSettings(false);
-    } catch (error) {
-      setConnectionError(errorText(error)); setSettings(true);
-    } finally { setConnecting(false); }
-  }, []);
-
-  useEffect(() => {
-    if (isTauri()) void connectDesktop();
-    else setSettings(true);
-  }, [connectDesktop]);
-
-  useEffect(() => {
-    if (!api) return;
-    const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout>;
-    async function poll() {
-      try {
-        const health = await api!.health(controller.signal);
-        if (health.name !== 'orion-server' || health.api_version !== 1) throw new Error('服务版本不兼容。');
-        const tasks = await api!.tasks(controller.signal);
-        if (controller.signal.aborted) return;
-        if (instanceRef.current && instanceRef.current !== health.instance_id) {
-          setNotice('服务已重启或切换，之前的内存结果不再可用。'); requestRef.current = null;
-        }
-        instanceRef.current = health.instance_id;
-        setOnline(true); setConnectionError(''); setTask(tasks[0] ?? null);
-      } catch (error) {
-        if (!controller.signal.aborted) { setOnline(false); setConnectionError(errorText(error)); }
-      } finally {
-        if (!controller.signal.aborted) timer = setTimeout(poll, 800);
-      }
-    }
-    setOnline(false); void poll();
-    return () => { controller.abort(); clearTimeout(timer); };
-  }, [api]);
-
-  useEffect(() => {
-    setParent(0); setOffset(0); setSelected(null); setDirectory(null); setPage(emptyPage); setDetail(null);
-    if (task) setRoot(displayPath(task.root));
-  }, [task?.id]);
-
-  useEffect(() => {
-    if (!api || !task || !online) return;
-    const controller = new AbortController();
-    setLoadingPage(true);
-    Promise.all([api.page(task.id, parent, offset, pageSize, controller.signal), api.detail(task.id, parent, controller.signal)])
-      .then(([next, dir]) => {
-        if (controller.signal.aborted) return;
-        if (offset > 0 && offset >= next.total) {
-          setOffset(0); setPage({ ...emptyPage, total: next.total }); setSelected(null); setDetail(null); return;
-        }
-        setPage(next); setDirectory(dir);
-      }).catch(error => { if (!controller.signal.aborted) setMessage(errorText(error)); })
-      .finally(() => { if (!controller.signal.aborted) setLoadingPage(false); });
-    return () => controller.abort();
-  }, [api, task?.id, task?.revision, parent, offset, pageSize, online]);
-
-  useEffect(() => {
-    if (!api || !task || selected === null || !online) { setDetail(null); return; }
-    const controller = new AbortController();
-    api.detail(task.id, selected, controller.signal).then(next => { if (!controller.signal.aborted) setDetail(next); }).catch(error => {
-      if (!controller.signal.aborted) setMessage(errorText(error));
-    });
-    return () => controller.abort();
-  }, [api, task?.id, task?.revision, selected, online]);
-
-  const navigate = useCallback((id: number) => {
-    setParent(id); setOffset(0); setSelected(null); setDetail(null);
-    // Re-selecting the current first page does not trigger the loading effect.
-    // Keep its results unless the directory or page actually changes.
-    if (id !== parent || offset !== 0) { setPage(emptyPage); setDirectory(null); }
-    listRef.current?.scrollTo(0, 0);
-  }, [parent, offset]);
-
-  const pageCount = Math.max(1, Math.ceil(page.total / pageSize));
-  const pageNumber = Math.floor(offset / pageSize) + 1;
-
-  function changePage(nextPage: number) {
-    if (!online || !Number.isInteger(nextPage) || nextPage < 1 || nextPage > pageCount) return;
-    const nextOffset = (nextPage - 1) * pageSize;
-    if (nextOffset === offset) return;
-    setOffset(nextOffset); setSelected(null); setDetail(null);
-    setPage(current => ({ ...current, offset: nextOffset, entries: [] }));
-    listRef.current?.scrollTo(0, 0);
-  }
-
-  function changePageSize(nextSize: number) {
-    if (nextSize === pageSize || ![15, 50, 100].includes(nextSize)) return;
-    setPageSize(nextSize); setOffset(0); setSelected(null); setDetail(null);
-    setPage(current => ({ ...current, offset: 0, entries: [] }));
-    listRef.current?.scrollTo(0, 0);
-  }
-
-  async function startScan(path = root) {
-    if (!api || !online || !path.trim() || busy || active(task)) return;
-    setBusy(true); setMessage(''); setNotice('');
-    // Keep the same key after a timeout: retry cannot silently create a second scan.
-    if (!requestRef.current || requestRef.current.root !== path.trim()) requestRef.current = { root: path.trim(), id: crypto.randomUUID() };
-    try {
-      const next = await api.start(path.trim(), requestRef.current.id);
-      setTask(next); navigate(0); requestRef.current = null;
-    } catch (error) {
-      setMessage(errorText(error));
-      if (error instanceof ApiError && error.code !== 'disconnected') requestRef.current = null;
-    } finally { setBusy(false); }
-  }
-
+  useEffect(() => { if (task) setRoot(displayPath(task.root)); }, [task?.id]);
+  useEffect(() => { if (session.error) setSettings(true); else if (api) setSettings(false); }, [session.error, api]);
+  async function startScan(path = root) { await scan.start(path); }
   async function chooseDirectory() {
-    if (!isTauri()) return;
+    if (!desktop.available()) return;
     try {
-      const chosen = await open({ directory: true, multiple: false, title: '选择要扫描的目录' });
+      const chosen = await desktop.chooseDirectory();
       if (typeof chosen === 'string') { setRoot(chosen); await startScan(chosen); }
     } catch (error) { setMessage(errorText(error)); }
   }
-
-  async function cancel() {
-    if (!api || !task) return;
-    setBusy(true);
-    try { setTask(await api.cancel(task.id)); } catch (error) { setMessage(errorText(error)); }
-    finally { setBusy(false); }
-  }
-
-  function moveSelection(event: KeyboardEvent<HTMLDivElement>) {
-    const entries = page.entries;
-    const current = entries.findIndex(e => e.id === selected);
-    let next = current;
-    if (event.key === 'ArrowDown') next = Math.min(current + 1, entries.length - 1);
-    else if (event.key === 'ArrowUp') next = Math.max(0, current - 1);
-    else if (event.key === 'Home') next = 0;
-    else if (event.key === 'End') next = entries.length - 1;
-    else if (event.key === 'Enter' && entries[current]?.kind === 'directory') { event.preventDefault(); navigate(entries[current].id); return; }
-    else if ((event.key === 'Backspace' || (event.altKey && event.key === 'ArrowLeft')) && directory?.parent_id !== null && directory) {
-      event.preventDefault(); navigate(directory.parent_id); return;
-    } else return;
-    event.preventDefault();
-    if (entries[next]) { setSelected(entries[next].id); virtual.scrollToIndex(next); }
-  }
-
-  const shownDetail = detail ?? directory;
   const running = active(task);
   const elapsed = task ? Math.max(0, ((task.finished_at ?? Date.now()) - task.started_at) / 1000) : 0;
-  const crumbs = directory ? [...directory.ancestors, directory].filter(c => c.id !== 0) : [];
   const connect = () => {
-    try { setConnection(validateConnection(connectionForm)); setSettings(false); setMessage(''); }
+    try { session.connect(connectionForm); setSettings(false); setMessage(''); }
     catch (error) { setMessage(errorText(error)); }
   };
 
@@ -210,7 +49,7 @@ export default function App() {
     <main className="main-content">
       {settings && <section id="connection-settings" className="connection-panel">
         <div className="connection-title"><Plug size={18} /><strong>连接本地服务</strong><Button variant="ghost" size="icon" aria-label="关闭连接设置" onClick={() => setSettings(false)}><X /></Button></div>
-        {isTauri() ? <>
+        {desktop.available() ? <>
           <p>后台会随 Orion 自动启动。关闭窗口后仍会在系统托盘中运行，右键托盘图标选择“退出 Orion”可关闭后台。</p>
           <Button className="mb-3" variant="outline" size="sm" disabled={connecting} onClick={() => void connectDesktop()}><RefreshCw />{connecting ? '正在连接后台…' : '重新连接后台'}</Button>
         </> : <>
@@ -222,51 +61,19 @@ export default function App() {
       {notice && <div className="notice" role="status"><Info size={16} />{notice}<button aria-label="关闭通知" onClick={() => setNotice('')}><X size={15} /></button></div>}
 
       <form className="path-bar" onSubmit={e => { e.preventDefault(); void startScan(); }}>
-        <Button variant="outline" type="button" onClick={chooseDirectory} disabled={!isTauri() || !online || busy || running} aria-describedby={!isTauri() ? 'directory-picker-help' : undefined}><FolderOpen />选择目录</Button>
-        <input id="root-path" aria-label="扫描目录路径" placeholder={isTauri() ? '选择目录，或输入完整路径' : '粘贴要扫描的目录完整路径'} value={root} onChange={e => setRoot(e.target.value)} disabled={running} />
-        <Button type="submit" disabled={!online || busy || running || !root.trim()}>{busy && !running ? <LoaderCircle className="spin" /> : <ScanLine />}{task && root.trim() === displayPath(task.root) ? '重新扫描' : '开始扫描'}</Button>
+        <Button variant="outline" type="button" onClick={chooseDirectory} disabled={!desktop.available() || !online || busy || running || task?.status === 'unknown'} aria-describedby={!desktop.available() ? 'directory-picker-help' : undefined}><FolderOpen />选择目录</Button>
+        <input id="root-path" aria-label="扫描目录路径" placeholder={desktop.available() ? '选择目录，或输入完整路径' : '粘贴要扫描的目录完整路径'} value={root} onChange={e => setRoot(e.target.value)} disabled={running} />
+        <Button type="submit" disabled={!online || busy || running || task?.status === 'unknown' || !root.trim()}>{busy && !running ? <LoaderCircle className="spin" /> : <ScanLine />}{task && root.trim() === displayPath(task.root) ? '重新扫描' : '开始扫描'}</Button>
       </form>
-      <div className="scan-note"><span><ShieldCheck size={13} />只读扫描，不修改或删除文件。</span>{!isTauri() && <span id="directory-picker-help">浏览器预览需粘贴路径；桌面版可直接选择目录。</span>}</div>
+      <div className="scan-note"><span><ShieldCheck size={13} />只读扫描，不修改或删除文件。</span>{!desktop.available() && <span id="directory-picker-help">浏览器预览需粘贴路径；桌面版可直接选择目录。</span>}</div>
 
       {task && <section className="scan-summary" aria-label="扫描概要">
         <div className="scan-totals"><span>逻辑大小 <strong>{formatBytes(task.logical_bytes)}</strong></span><span>{task.files.toLocaleString()} 个文件</span><span title="含扫描根目录">{task.directories.toLocaleString()} 个目录</span></div>
         <div className="scan-progress"><span className={cn('scan-status', running && 'is-running', !running && !task.complete && 'is-incomplete')}>{running ? <LoaderCircle className="spin" size={15} /> : task.complete ? <Check size={15} /> : <TriangleAlert size={15} />}{labels[task.status]}</span><span>{elapsed.toFixed(1)} 秒</span>{running && <Button variant="destructive" size="sm" onClick={cancel} disabled={!online || busy || task.status === 'cancelling'}><Square />{task.status === 'cancelling' ? '取消中' : '取消扫描'}</Button>}</div>
       </section>}
 
-      {task ? <section className="explorer">
-        <div className="explorer-top"><h2>目录与文件</h2><span>{page.total.toLocaleString()} 项 · 按大小降序</span></div>
-          <div className="breadcrumb-bar"><Button variant="ghost" size="icon" aria-label="返回上级目录" onClick={() => directory?.parent_id != null && navigate(directory.parent_id)} disabled={!directory || directory.parent_id === null}><ArrowLeft /></Button><nav aria-label="目录层级"><span><button title={displayPath(task.root)} onClick={() => navigate(0)}>{displayPath(task.root)}</button></span>{crumbs.map(c => <span key={c.id}><ChevronRight size={13} /><button title={c.name} onClick={() => navigate(c.id)}>{c.name}</button></span>)}</nav>{loadingPage && <LoaderCircle className="spin subtle" size={14} />}</div>
-          <div className="explorer-body">
-            <div className="file-panel"><div className="table-header"><span>名称</span><span>大小 <ArrowDown size={12} /></span><span>占当前目录</span></div>
-              <div ref={listRef} className="file-list" aria-busy={loadingPage} role="listbox" tabIndex={0} aria-label="目录内容，方向键选择，Enter 进入目录，退格返回" aria-activedescendant={selected === null ? undefined : `entry-${selected}`} onKeyDown={moveSelection}>
-                {page.entries.length ? <div style={{ height: virtual.getTotalSize(), position: 'relative' }}>{virtual.getVirtualItems().map(row => {
-                  const entry = page.entries[row.index];
-                  const percentage = directory?.logical_bytes ? Math.min(100, entry.logical_bytes / directory.logical_bytes * 100) : 0;
-                  return <div key={entry.id} id={`entry-${entry.id}`} role="option" aria-selected={selected === entry.id} className={cn('file-row', selected === entry.id && 'selected')} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: row.size, transform: `translateY(${row.start}px)` }} onClick={() => { setSelected(entry.id); listRef.current?.focus(); }} onDoubleClick={() => entry.kind === 'directory' && navigate(entry.id)}>
-                    <div className="entry-name"><EntryIcon entry={entry} /><span title={entry.name}>{entry.name}</span>{entry.kind === 'link' && <small>链接 · 跳过</small>}{entry.kind === 'directory' && <button className="enter-directory" aria-label={`进入 ${entry.name}`} onClick={e => { e.stopPropagation(); navigate(entry.id); }}><ChevronRight size={15} /></button>}</div><span className="entry-size">{formatBytes(entry.logical_bytes)}</span><div className="entry-share"><div className="share-track"><span style={{ width: `${percentage}%` }} /></div><span>{percentage.toFixed(1)}%</span></div>
-                  </div>;
-                })}</div> : <div className="list-empty">{loadingPage ? '正在读取目录…' : running ? '正在发现文件，结果会逐步出现。' : '此目录没有已统计的内容。'}</div>}
-              </div>
-              <nav className="pagination" aria-label="目录分页">
-                <div className="pagination-info">
-                  <span aria-live="polite">共 {page.total.toLocaleString()} 项{page.entries.length > 0 && ` · ${offset + 1}–${offset + page.entries.length}`}</span>
-                  <label>每页<select aria-label="每页条数" value={pageSize} onChange={event => changePageSize(Number(event.target.value))} disabled={!online}><option value={15}>15</option><option value={50}>50</option><option value={100}>100</option></select>项</label>
-                </div>
-                <div className="pagination-controls">
-                  <Button variant="outline" size="sm" aria-label="上一页" disabled={!online || loadingPage || offset === 0} onClick={() => changePage(pageNumber - 1)}><ArrowLeft />上一页</Button>
-                  <form key={`${parent}:${offset}:${pageSize}`} onSubmit={event => { event.preventDefault(); changePage(Number(new FormData(event.currentTarget).get('page'))); }}>
-                    <label>第<input name="page" aria-label="跳转页码" type="number" min={1} max={pageCount} step={1} defaultValue={pageNumber} disabled={!online || page.total === 0} />/ {pageCount.toLocaleString()} 页</label>
-                    <Button type="submit" variant="ghost" size="sm" disabled={!online || loadingPage || page.total === 0}>跳转</Button>
-                  </form>
-                  <Button variant="outline" size="sm" aria-label="下一页" disabled={!online || loadingPage || offset + pageSize >= page.total} onClick={() => changePage(pageNumber + 1)}>下一页<ArrowRight /></Button>
-                </div>
-              </nav>
-            </div>
-            <aside className="detail-panel"><div className="detail-heading">{selected === null ? '当前目录' : '条目详情'}<Info size={15} /></div>{shownDetail && <><h3>{shownDetail.id === 0 ? displayPath(task.root).split(/[\\/]/).filter(Boolean).at(-1) : shownDetail.name}</h3><p className="detail-kind">{{ directory: '文件夹', file: '文件', link: '链接（未跟随）', other: '特殊文件' }[shownDetail.kind]}</p><dl><dt>逻辑大小</dt><dd className="detail-size">{formatBytes(shownDetail.logical_bytes)}</dd><dt>修改时间</dt><dd>{formatDate(shownDetail.modified_at)}</dd><dt>完整路径</dt><dd className="detail-path">{displayPath(shownDetail.path)}</dd></dl><div className="detail-buttons"><Button variant="outline" size="sm" onClick={async () => { try { await navigator.clipboard.writeText(displayPath(shownDetail.path)); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { setMessage('复制失败，请从详情中选择路径手动复制。'); } }}>{copied ? <Check /> : <Copy />}{copied ? '已复制' : '复制路径'}</Button>{isTauri() && <Button variant="outline" size="sm" onClick={() => revealItemInDir(displayPath(shownDetail.path)).catch(e => setMessage(errorText(e)))}><FolderOpen />系统定位</Button>}</div><div className="detail-footnote"><Info size={13} /><span>数据来自本次扫描。文件可能已变化；重新扫描可更新结果。</span></div></>}</aside>
-          </div>
-        <footer className="explorer-footer"><span>{task.complete ? '所选范围已枚举' : '部分结果，尚未完整覆盖'} · 实际磁盘占用未知</span>{task.issue_count > 0 && <button className="issues-trigger" aria-expanded={showIssues} aria-controls="scan-issues" onClick={() => setShowIssues(v => !v)}><TriangleAlert size={13} />{task.issue_count} 项未覆盖或异常<ChevronRight size={13} /></button>}</footer>
-      </section> : <div className="empty-state"><FolderOpen size={24} strokeWidth={1.5} /><div><h2>扫描一个目录开始</h2><p>{isTauri() ? '选择目录或输入路径，扫描后按大小逐层浏览。' : '在上方输入目录路径，扫描后按大小逐层浏览。'}</p></div></div>}
-      {showIssues && task && task.issue_count > 0 && <section id="scan-issues" className="issues-panel"><h2>未覆盖与异常 <span>展示前 {task.issues.length} 项，共 {task.issue_count} 项</span></h2>{task.issues.map((issue, i) => <div key={i}><TriangleAlert size={15} /><div><code>{displayPath(issue.path)}</code><p>{issue.message}</p></div></div>)}</section>}
+      {task ? <DirectoryExplorer api={api} task={task} online={online} onError={setMessage} /> : <div className="empty-state"><FolderOpen size={24} strokeWidth={1.5} /><div><h2>扫描一个目录开始</h2><p>{desktop.available() ? '选择目录或输入路径，扫描后按大小逐层浏览。' : '在上方输入目录路径，扫描后按大小逐层浏览。'}</p></div></div>}
+
     </main>
   </div>;
 }

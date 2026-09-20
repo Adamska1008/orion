@@ -1,0 +1,205 @@
+{
+  "health": {
+    "name": "orion-server",
+    "api_version": 1,
+    "instance_id": "00000000-0000-0000-0000-000000000000",
+    "version": "fixture-version",
+    "capabilities": [
+      "graceful_shutdown"
+    ]
+  },
+  "connection": {
+    "url": "http://127.0.0.1:43120",
+    "token": "fixture-token",
+    "instance_id": "00000000-0000-0000-0000-000000000000"
+  },
+  "tasks": [
+    {
+      "id": "00000000-0000-0000-0000-000000000000",
+      "root": "C:\\data",
+      "status": "running",
+      "revision": 7,
+      "started_at": 1000,
+      "finished_at": null,
+      "files": 2,
+      "directories": 1,
+      "logical_bytes": 37,
+      "allocated_bytes": null,
+      "complete": false,
+      "issue_count": 1,
+      "issues": [
+        {
+          "path": "C:\\data\\link",
+          "code": "link_skipped",
+          "message": "fixture issue"
+        }
+      ]
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000000",
+      "root": "C:\\data",
+      "status": "cancelling",
+      "revision": 7,
+      "started_at": 1000,
+      "finished_at": null,
+      "files": 2,
+      "directories": 1,
+      "logical_bytes": 37,
+      "allocated_bytes": null,
+      "complete": false,
+      "issue_count": 1,
+      "issues": [
+        {
+          "path": "C:\\data\\link",
+          "code": "link_skipped",
+          "message": "fixture issue"
+        }
+      ]
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000000",
+      "root": "C:\\data",
+      "status": "cancelled",
+      "revision": 7,
+      "started_at": 1000,
+      "finished_at": 2000,
+      "files": 2,
+      "directories": 1,
+      "logical_bytes": 37,
+      "allocated_bytes": null,
+      "complete": false,
+      "issue_count": 1,
+      "issues": [
+        {
+          "path": "C:\\data\\link",
+          "code": "link_skipped",
+          "message": "fixture issue"
+        }
+      ]
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000000",
+      "root": "C:\\data",
+      "status": "completed",
+      "revision": 7,
+      "started_at": 1000,
+      "finished_at": 2000,
+      "files": 2,
+      "directories": 1,
+      "logical_bytes": 37,
+      "allocated_bytes": null,
+      "complete": true,
+      "issue_count": 1,
+      "issues": [
+        {
+          "path": "C:\\data\\link",
+          "code": "link_skipped",
+          "message": "fixture issue"
+        }
+      ]
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000000",
+      "root": "C:\\data",
+      "status": "failed",
+      "revision": 7,
+      "started_at": 1000,
+      "finished_at": 2000,
+      "files": 2,
+      "directories": 1,
+      "logical_bytes": 37,
+      "allocated_bytes": null,
+      "complete": false,
+      "issue_count": 1,
+      "issues": [
+        {
+          "path": "C:\\data\\link",
+          "code": "link_skipped",
+          "message": "fixture issue"
+        }
+      ]
+    }
+  ],
+  "page": {
+    "revision": 7,
+    "total": 4,
+    "offset": 0,
+    "entries": [
+      {
+        "id": 0,
+        "parent_id": null,
+        "name": "entry-0",
+        "kind": "directory",
+        "logical_bytes": 37,
+        "allocated_bytes": null,
+        "modified_at": null,
+        "enumerated": false
+      },
+      {
+        "id": 1,
+        "parent_id": 0,
+        "name": "entry-1",
+        "kind": "file",
+        "logical_bytes": 37,
+        "allocated_bytes": null,
+        "modified_at": 1000,
+        "enumerated": true
+      },
+      {
+        "id": 2,
+        "parent_id": 0,
+        "name": "entry-2",
+        "kind": "link",
+        "logical_bytes": 37,
+        "allocated_bytes": null,
+        "modified_at": 1000,
+        "enumerated": false
+      },
+      {
+        "id": 3,
+        "parent_id": 0,
+        "name": "entry-3",
+        "kind": "other",
+        "logical_bytes": 37,
+        "allocated_bytes": null,
+        "modified_at": 1000,
+        "enumerated": false
+      }
+    ]
+  },
+  "detail": {
+    "id": 1,
+    "parent_id": 0,
+    "name": "entry-1",
+    "kind": "file",
+    "logical_bytes": 37,
+    "allocated_bytes": null,
+    "modified_at": 1000,
+    "enumerated": true,
+    "path": "C:\\data\\entry-1",
+    "ancestors": [
+      {
+        "id": 0,
+        "parent_id": null,
+        "name": "entry-0",
+        "kind": "directory",
+        "logical_bytes": 37,
+        "allocated_bytes": null,
+        "modified_at": null,
+        "enumerated": false
+      }
+    ]
+  },
+  "errors": [
+    {
+      "code": "scan_in_progress",
+      "message": "fixture conflict",
+      "task_id": "00000000-0000-0000-0000-000000000000"
+    },
+    {
+      "code": "stale_revision",
+      "message": "fixture stale",
+      "task_id": null
+    }
+  ]
+}

@@ -29,4 +29,14 @@ describe('local API client', () => {
     expect(displayPath('\\\\?\\C:\\资料')).toBe('C:\\资料');
     expect(displayPath('\\\\?\\UNC\\server\\folder')).toBe('\\\\server\\folder');
   });
+
+  it('rejects malformed success bodies and tolerates non-JSON HTTP errors', async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'missing-fields' }) })
+      .mockResolvedValueOnce({ ok: false, status: 503, json: async () => { throw new Error('not JSON'); } });
+    vi.stubGlobal('fetch', fetcher);
+    const api = new Api({ url: 'http://127.0.0.1:1234', token: 'test' });
+    await expect(api.start('C:\\data', 'request')).rejects.toMatchObject({ code: 'invalid_response' });
+    await expect(api.tasks()).rejects.toMatchObject({ code: 'request_failed', message: '请求失败（503）' });
+  });
 });

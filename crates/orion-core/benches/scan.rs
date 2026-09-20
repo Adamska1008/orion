@@ -586,7 +586,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         String::from_utf8_lossy(&git.stdout).trim().into(),
     );
     let mut report = Report {
-        schema_version: 3,
+        schema_version: 4,
         label: options.label.clone(),
         timestamp_ms: orion_core::now_ms(),
         environment,
@@ -596,9 +596,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         candidate: options.candidate,
         baseline: options.baseline,
         workers: options.workers,
-        parallel_source_sha256: format!("{:x}", Sha256::digest(include_bytes!("../src/parallel.rs"))),
+        parallel_source_sha256: format!("{:x}", Sha256::digest(include_bytes!("../src/scanner/parallel.rs"))),
         benchmark_source_sha256: format!("{:x}", Sha256::digest(include_bytes!("scan.rs"))),
-        core_source_sha256: format!("{:x}", Sha256::digest(include_bytes!("../src/lib.rs"))),
+        core_source_sha256: core_source_digest(),
         valid: true,
         datasets: vec![],
     };
@@ -640,4 +640,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
     Ok(())
+}
+
+fn core_source_digest() -> String {
+    let mut digest = Sha256::new();
+    for source in [
+        include_bytes!("../src/lib.rs").as_slice(),
+        include_bytes!("../src/model.rs").as_slice(),
+        include_bytes!("../src/index.rs").as_slice(),
+        include_bytes!("../src/scan.rs").as_slice(),
+        include_bytes!("../src/query.rs").as_slice(),
+        include_bytes!("../src/legacy_scan.rs").as_slice(),
+        include_bytes!("../src/scanner/mod.rs").as_slice(),
+        include_bytes!("../src/scanner/parallel.rs").as_slice(),
+        include_bytes!("../src/scanner/filesystem.rs").as_slice(),
+    ] {
+        digest.update((source.len() as u64).to_le_bytes());
+        digest.update(source);
+    }
+    format!("{:x}", digest.finalize())
 }

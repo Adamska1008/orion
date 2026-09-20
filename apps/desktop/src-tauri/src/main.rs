@@ -1,8 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod backend;
+mod tray;
 
-use backend::{Backend, Connection, ExitError};
+use orion_runtime::{Backend, Connection, ExitError};
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -145,7 +145,7 @@ fn main() {
                 let _ = backend.ensure();
                 let mut previous = String::new();
                 loop {
-                    let current = backend.status();
+                    let current = tray::status_text(backend.status());
                     if current != previous {
                         let _ = status.set_text(&current);
                         let _ = tray.set_tooltip(Some(format!("Orion · {current}")));

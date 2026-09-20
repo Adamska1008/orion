@@ -1,9 +1,6 @@
 // Exercise the desktop's real process manager against Cargo's freshly built server,
 // without opening a Tauri window or touching the user's running Orion instance.
-#[path = "../../../apps/desktop/src-tauri/src/backend.rs"]
-mod backend;
-
-use backend::{Backend, Connection};
+use orion_runtime::{Backend, BackendStatus, Connection};
 use reqwest::blocking::Client;
 use std::{
     fs,
@@ -95,7 +92,7 @@ fn desktop_starts_reuses_and_stops_server_then_restarts_cleanly() {
     fs::write(runtime.join("connection.json"), b"stale").unwrap();
     let owner = manager(&runtime);
     let first = owner.0.ensure().unwrap();
-    assert!(owner.0.status().contains("就绪"));
+    assert_eq!(owner.0.status(), BackendStatus::Ready);
     assert_eq!(owner.0.ensure().unwrap().instance_id, first.instance_id);
 
     let reopened = manager(&runtime);
@@ -128,7 +125,7 @@ fn desktop_starts_reuses_and_stops_server_then_restarts_cleanly() {
         assert!(Instant::now() < deadline, "fixture scan timed out");
         std::thread::sleep(Duration::from_millis(25));
     }
-    assert!(reopened.0.status().contains("扫描完成"));
+    assert!(matches!(reopened.0.status(), BackendStatus::Completed(_)));
     reopened.0.shutdown(false).unwrap();
     assert!(!runtime.join("connection.json").exists());
     assert!(
@@ -184,6 +181,6 @@ fn duplicate_server_cannot_replace_live_connection_credentials() {
     assert_eq!(saved.instance_id, connection.instance_id);
     // Assert only the boolean so a failed assertion cannot print a credential.
     assert!(saved.token == connection.token);
-    assert!(owner.0.status().contains("就绪"));
+    assert_eq!(owner.0.status(), BackendStatus::Ready);
     owner.0.shutdown(false).unwrap();
 }

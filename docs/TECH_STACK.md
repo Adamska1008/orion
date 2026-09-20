@@ -4,6 +4,8 @@
 
 已采用：独立 Rust Server（Axum + Tokio），本地 HTTP / JSON API；GUI 使用 Tauri + React + TypeScript + Vite、shadcn/ui 风格的源码组件 + Tailwind、TanStack Virtual。后续 CLI / MCP 复用同一 API。
 
+当前源码按任务协调、HTTP 适配、扫描、索引查询、后台生命周期和前端 feature 划分，具体模块及锁/状态约束见 [当前代码结构](ARCHITECTURE.md)。`orion-runtime` 是桌面和隔离进程测试共用的本地后台客户端，不依赖 Tauri 或扫描核心。
+
 开发时先 `cargo build -p orion-server`，再 `npm run desktop`。Tauri 自动启动或重连独立 Server，不使用自定义启动或停止脚本；后端仍可单独运行。具体步骤见 [README](../README.md)，已实现接口见 [API](API.md)。
 
 ## 建议组合

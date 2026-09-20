@@ -43,9 +43,9 @@ Windows 桌面客户端支持 `Ctrl+-` 缩小、`Ctrl++`（或 `Ctrl+=`）放大
 ## 常规检查
 
 ```powershell
-cargo test -p orion-core -p orion-server -p orion-desktop
+cargo test --workspace
 cargo fmt --all --check
-cargo clippy -p orion-core -p orion-server -p orion-desktop --all-targets -- -D warnings
+cargo clippy --workspace --all-targets -- -D warnings
 npm test
 npm run build
 ```
@@ -86,5 +86,8 @@ cargo build --locked --release -p orion-server -p orion-desktop --features orion
 
 - `crates/orion-core`：目录枚举、索引、统计、取消与部分结果。
 - `crates/orion-server`：本地 API、认证、共享任务和重复请求处理。
+- `crates/orion-runtime`：无 Tauri 依赖的后台发现、HTTP 客户端和进程生命周期。
 - `apps/desktop`：React UI 与 Tauri 桌面集成。
+- `contracts/api-v1.json`：由 Rust 与 TypeScript 共同校验的 API 响应样本。
+- [当前代码结构](docs/ARCHITECTURE.md)：模块边界、状态约束与重构验证。
 - [Product Spec](docs/PRODUCT_SPEC.md)、[技术选型](docs/TECH_STACK.md)、[MVP 任务计划](docs/MVP_TASK_PLAN.md)、[API 说明](docs/API.md)。

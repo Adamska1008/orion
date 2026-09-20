@@ -2465,14 +2465,21 @@ dependencies = [
 name = "orion-desktop"
 version = "0.1.0"
 dependencies = [
- "reqwest",
- "serde",
- "serde_json",
+ "orion-runtime",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
  "tauri-plugin-opener",
  "tauri-plugin-single-instance",
+]
+
+[[package]]
+name = "orion-runtime"
+version = "0.1.0"
+dependencies = [
+ "reqwest",
+ "serde",
+ "serde_json",
  "tempfile",
 ]
 
@@ -2483,6 +2490,7 @@ dependencies = [
  "axum",
  "http-body-util",
  "orion-core",
+ "orion-runtime",
  "reqwest",
  "serde",
  "serde_json",
