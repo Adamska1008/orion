@@ -29,6 +29,14 @@ export const MAP_GAP = 3;
 export const MAP_HEADER = 30;
 export const MAP_PADDING = 5;
 
+export function findAggregate(rectangles: MapRect[], parent: number): MapRect | undefined {
+  for (const rect of rectangles) {
+    if (!rect.node && rect.parent === parent) return rect;
+    const nested = findAggregate(rect.children, parent);
+    if (nested) return nested;
+  }
+}
+
 export function layoutTreemap(root: TreemapNode, width: number, height: number, inheritedColor?: number): MapRect[] {
   if (!root.expanded || root.logical_bytes <= 0 || width <= 0 || height <= 0) return [];
   let otherBytes = root.omitted_bytes, otherCount = root.omitted_count;

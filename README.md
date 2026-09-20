@@ -79,10 +79,8 @@ cargo build --locked --release -p orion-server -p orion-desktop --features orion
 - 普通路径枚举会复查目录与链接，但不能在其他进程恶意并发替换路径时提供严格隔离保证。文件增删改动需要重新扫描。
 - 目录列表按大小降序，默认每页 15 项，可切换为 50 / 100 项，支持上一页、下一页和页码跳转；每页在固定高度列表内虚拟化渲染。扫描时每次查询是独立版本，跨页排序可能变化；GUI 不拼接不同版本的分页结果。
 - 可切换为「空间图」，默认显示 2 层，可选 1–4 层；面积表示逻辑大小，文件夹保留嵌套边界。单击查看详情，双击或按 Enter 进入目录，使用面包屑返回。空间图查询整个当前目录，不受列表页码影响。
-- 空间图在同一索引版本中读取最多 2,048 个节点、每个目录最多 64 个最大子项，剩余有大小的条目汇总为「其他」，点击可打开完整分页列表。前端继续合并面积过小的色块；尺寸不足或达到深度/节点上限的目录保持折叠，进入后可继续查看。0 大小条目不绘制，可在列表中查看。需使用支持 `treemap` 的新版 Server。
+- 空间图在同一索引版本中读取最多 2,048 个节点、每个目录最多 64 个最大子项，剩余有大小的条目汇总为「其他」。单击文件或「其他」会保持空间图，并在右侧显示文件属性或汇总信息；需要逐项查看时，可在汇总详情中打开所在目录的完整分页列表。前端继续合并面积过小的色块；尺寸不足或达到深度/节点上限的目录保持折叠，进入后可继续查看。0 大小条目不绘制，可在列表中查看。需使用支持 `treemap` 的新版 Server。
 - 未实现持久化、清理、MFT / USN、完整 CLI、MCP 或 Skill。
-
-扫描性能对比使用标准 `cargo bench`，方法、固定数据集与真实目录用法见 [Benchmark](docs/BENCHMARK.md)。
 
 ## 项目结构
 
@@ -91,5 +89,6 @@ cargo build --locked --release -p orion-server -p orion-desktop --features orion
 - `crates/orion-runtime`：无 Tauri 依赖的后台发现、HTTP 客户端和进程生命周期。
 - `apps/desktop`：React UI 与 Tauri 桌面集成。
 - `contracts/api-v1.json`：由 Rust 与 TypeScript 共同校验的 API 响应样本。
-- [当前代码结构](docs/ARCHITECTURE.md)：模块边界、状态约束与重构验证。
-- [Product Spec](docs/PRODUCT_SPEC.md)、[技术选型](docs/TECH_STACK.md)、[MVP 任务计划](docs/MVP_TASK_PLAN.md)、[API 说明](docs/API.md)。
+- `docs/`：公开文档，目前包含 [API 使用说明](docs/API.md)。
+
+内部开发文档（产品草案、任务计划、架构与技术选型、评审记录、benchmark 报告）统一放在 `.local/docs/`，由 `.gitignore` 排除。新克隆或 worktree 不会自动包含这些本地资料，需要时单独复制。

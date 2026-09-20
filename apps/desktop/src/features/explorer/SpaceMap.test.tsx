@@ -25,6 +25,7 @@ function detail(id: number): Detail {
   return { ...node, ancestors, path: id === 0 ? task.root : task.root + '\\' + [...ancestors.slice(1), node].map(item => item.name).join('\\') };
 }
 let container: HTMLDivElement, app: Root;
+let mapWidth: number, resizeMap: () => void;
 const api = new Api({ url: 'http://127.0.0.1:43123', token: 'test' });
 const onError = vi.fn();
 async function render(nextTask = task) { await act(async () => { app.render(<DirectoryExplorer api={api} task={nextTask} online onError={onError} />); }); }
@@ -38,8 +39,9 @@ async function depth(value: number) {
 }
 beforeEach(async () => {
   vi.useFakeTimers(); vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
-  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} });
-  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(960);
+  mapWidth = 960;
+  vi.stubGlobal('ResizeObserver', class { constructor(callback: () => void) { resizeMap = callback; } observe() {} disconnect() {} });
+  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => mapWidth);
   vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(540);
   HTMLElement.prototype.scrollTo = vi.fn();
   vi.spyOn(Api.prototype, 'page').mockImplementation(async (_task, parent, offset, limit) => ({ revision: 7, total: nodes.get(parent)!.child_count, offset, entries: nodes.get(parent)!.children.slice(offset, offset + limit) }));
@@ -63,6 +65,8 @@ it('selects a deep file, drills into a nested directory, and keeps depth relativ
   await click('.explorer-views button:last-child'); await depth(3);
   await click('[data-entry-id="3"]');
   expect(container.querySelector('.detail-path')?.textContent).toBe('C:\\data\\projects\\build\\large.bin');
+  expect(container.querySelector('.space-map')).not.toBeNull();
+  expect(container.querySelector('[data-entry-id="3"]')?.getAttribute('aria-pressed')).toBe('true');
   await click('[data-entry-id="2"]', 'dblclick');
   expect(Api.prototype.treemap).toHaveBeenLastCalledWith(task.id, 2, 3, expect.any(AbortSignal));
   expect(container.querySelector('nav[aria-label="目录层级"]')?.textContent).toContain('projectsbuild');
@@ -105,12 +109,87 @@ it('clears old data and rejects late replies when a new scan replaces the task',
   expect(container.querySelector('[data-entry-id="129"]')).toBeNull();
 });
 
-it('opens the full directory list from an aggregate tile', async () => {
+it('keeps a repeatedly clicked or double-clicked file selected in the map with its properties', async () => {
+  await click('.explorer-views button:last-child');
+  await click('[data-entry-id="4"]');
+  await click('[data-entry-id="4"]');
+  await click('[data-entry-id="4"]', 'dblclick');
+  expect(container.querySelector('.detail-path')?.textContent).toBe('C:\\data\\projects\\archive.zip');
+  expect(container.querySelector('.detail-kind')?.textContent).toBe('文件');
+  expect(container.querySelector('[data-entry-id="4"]')?.getAttribute('aria-pressed')).toBe('true');
+  expect(container.querySelector('.space-map')).not.toBeNull();
+  expect(container.querySelector('.pagination')).toBeNull();
+});
+
+it('selects an aggregate tile and opens the directory list only with the explicit detail action', async () => {
   const aggregate = { ...response(), root: { ...tree, children: [], omitted_count: 31, omitted_bytes: 100 } };
   vi.mocked(Api.prototype.treemap).mockResolvedValue(aggregate);
   await click('.explorer-views button:last-child'); await click('.map-other');
+  await click('.map-other', 'dblclick');
+  expect(container.querySelector('.space-map')).not.toBeNull();
+  expect(container.querySelector('.pagination')).toBeNull();
+  expect(container.querySelector('.map-other')?.getAttribute('aria-pressed')).toBe('true');
+  expect(container.querySelector('.detail-heading')?.textContent).toBe('汇总详情');
+  expect(container.querySelector('.detail-panel h3')?.textContent).toBe('其他 31 项');
+  expect(container.querySelector('.detail-size')?.textContent).toBe('100 B');
+  expect(container.querySelector('.detail-path')?.textContent).toBe('C:\\data');
+  expect(container.querySelector('.detail-panel')?.textContent).not.toContain('修改时间');
+  await click('.detail-buttons button');
   expect(container.querySelectorAll('[role="option"]')).toHaveLength(15);
   expect(container.querySelector('.pagination')?.textContent).toContain('共 31 项');
+});
+
+it('shows a nested aggregate in its own directory and switches back to file properties on selection', async () => {
+  const nested = { ...tree.children[0], children: [tree.children[0].children[1]], omitted_count: 3, omitted_bytes: 50, child_count: 4 };
+  vi.mocked(Api.prototype.treemap).mockResolvedValue({ ...response(), root: { ...tree, children: [nested, ...tree.children.slice(1)] } });
+  await click('.explorer-views button:last-child'); await click('[data-aggregate-parent="1"]');
+  expect(container.querySelector('.detail-panel h3')?.textContent).toBe('其他 3 项');
+  expect(container.querySelector('.detail-path')?.textContent).toBe('C:\\data\\projects');
+  expect(container.querySelector('.detail-panel')?.textContent).toContain('50.0%');
+  expect(container.querySelector('[data-entry-id="1"]')?.getAttribute('aria-pressed')).toBe('false');
+  await click('[data-entry-id="4"]');
+  expect(container.querySelector('.map-other')?.getAttribute('aria-pressed')).toBe('false');
+  expect(container.querySelector('.detail-path')?.textContent).toBe('C:\\data\\projects\\archive.zip');
+  await click('[data-aggregate-parent="1"]'); await click('.detail-buttons button');
+  expect(Api.prototype.page).toHaveBeenLastCalledWith(task.id, 1, 0, 15, expect.any(AbortSignal));
+});
+
+it('uses the displayed aggregate totals for small tiles and recalculates them on resize', async () => {
+  const snapshot = { ...response(), root: { ...tree, logical_bytes: 110, child_count: 33, omitted_count: 2, omitted_bytes: 10 } };
+  vi.mocked(Api.prototype.treemap).mockResolvedValue(snapshot);
+  await click('.explorer-views button:last-child'); await click('[data-aggregate-parent="0"]');
+  expect(container.querySelector('.detail-panel h3')?.textContent).toBe('其他 2 项');
+  expect(container.querySelector('.detail-size')?.textContent).toBe('10 B');
+  await act(async () => { mapWidth = 100; resizeMap(); });
+  expect(container.querySelector('.detail-panel h3')?.textContent).toBe('其他 32 项');
+  expect(container.querySelector('.detail-size')?.textContent).toBe('40 B');
+  expect(container.querySelector('.map-other')?.getAttribute('aria-pressed')).toBe('true');
+});
+
+it('refreshes selected aggregate totals with scanning and clears them for a new task', async () => {
+  vi.mocked(Api.prototype.treemap).mockResolvedValue({ ...response(), root: { ...tree, children: [], omitted_count: 31, omitted_bytes: 100 } });
+  await click('.explorer-views button:last-child'); await click('.map-other');
+  vi.mocked(Api.prototype.treemap).mockResolvedValue({ ...response(), revision: 8, root: { ...tree, logical_bytes: 120, child_count: 35, children: [], omitted_count: 35, omitted_bytes: 120 } });
+  await render({ ...task, revision: 8, status: 'running' });
+  await act(async () => { await vi.advanceTimersByTimeAsync(800); });
+  expect(container.querySelector('.detail-panel h3')?.textContent).toBe('其他 35 项');
+  expect(container.querySelector('.detail-size')?.textContent).toBe('120 B');
+  await render({ ...task, id: 'another-task' });
+  expect(container.querySelector('.detail-heading')?.textContent).toBe('当前目录');
+  expect(container.querySelector('.map-other')?.getAttribute('aria-pressed')).toBe('false');
+});
+
+it('clears aggregate selection when changing depth, view, or directory', async () => {
+  vi.mocked(Api.prototype.treemap).mockResolvedValue({ ...response(), root: { ...tree, children: [], omitted_count: 31, omitted_bytes: 100 } });
+  await click('.explorer-views button:last-child'); await click('.map-other');
+  await depth(3);
+  expect(container.querySelector('.detail-heading')?.textContent).toBe('当前目录');
+  await click('.map-other');
+  await click('.explorer-views button:first-child'); await click('.explorer-views button:last-child');
+  expect(container.querySelector('.detail-heading')?.textContent).toBe('当前目录');
+  await click('.map-other'); await click('nav[aria-label="目录层级"] button');
+  expect(container.querySelector('.detail-heading')?.textContent).toBe('当前目录');
+  expect(container.querySelector('.map-other')?.getAttribute('aria-pressed')).toBe('false');
 });
 
 it('explains an old backend and retries without hiding the list view', async () => {

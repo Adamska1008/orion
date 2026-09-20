@@ -3,6 +3,10 @@
 /apps/desktop/node_modules/
 /apps/desktop/dist/
 /.orion/
+# Local development notes, drafts, and benchmark reports
+/.local/
+# Local agent instructions
+/AGENTS.md
 *.log
 *.tsbuildinfo
 /apps/desktop/src-tauri/gen/

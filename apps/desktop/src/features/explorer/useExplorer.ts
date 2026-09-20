@@ -33,7 +33,7 @@ function reducer(state: State, action: Action): State {
     case 'size':
       if (action.size === state.pageSize || ![15, 50, 100].includes(action.size)) return state;
       return { ...state, pageSize: action.size, offset: 0, selected: null, detail: null, page: { ...state.page, offset: 0, entries: [] } };
-    case 'select': return { ...state, selected: action.id, detail: null };
+    case 'select': return state.selected === action.id ? state : { ...state, selected: action.id, detail: null };
     case 'loading': return { ...state, loadingPage: true };
     case 'loaded':
       if (state.offset > 0 && state.offset >= action.page.total) return { ...state, offset: 0, selected: null, detail: null, page: { ...emptyPage, total: action.page.total } };

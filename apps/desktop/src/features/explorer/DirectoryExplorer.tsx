@@ -9,6 +9,8 @@ import { active } from '../scan/useScanTask';
 import { useExplorer } from './useExplorer';
 import { useTreemap } from './useTreemap';
 import { SpaceMap } from './SpaceMap';
+import { useTreemapLayout } from './useTreemapLayout';
+import { findAggregate } from './treemapLayout';
 
 function EntryIcon({ entry }: { entry: Entry }) {
   return entry.kind === 'directory' ? <Folder className="entry-icon folder-icon" /> : <File className="entry-icon file-icon" />;
@@ -20,14 +22,23 @@ export function DirectoryExplorer({ api, task, online, onError }: { api: Api | n
   const [view, setView] = useState<'list' | 'map'>('list');
   const [depth, setDepth] = useState(2);
   const tree = useTreemap(api, task, parent, depth, view === 'map', online);
+  const map = useTreemapLayout(view === 'map' ? tree.data?.root ?? null : null);
+  const [aggregateSelection, setAggregateSelection] = useState<{ scope: string; parent: number } | null>(null);
+  const mapScope = `${task.id}:${parent}:${depth}`;
+  // Derive aggregate properties from the current layout, including tiny tiles
+  // merged by the frontend, so scan updates and resizing cannot leave stale totals.
+  const aggregate = aggregateSelection?.scope === mapScope && aggregateSelection.parent === selected
+    ? findAggregate(map.rectangles, aggregateSelection.parent) : undefined;
   const [showIssues, setShowIssues] = useState(false);
   const [copied, setCopied] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const virtual = useVirtualizer({ count: page.entries.length, getScrollElement: () => listRef.current, estimateSize: () => 48, overscan: 8 });
-  function navigate(id: number) { explorer.navigate(id); listRef.current?.scrollTo(0, 0); }
+  function selectEntry(id: number | null) { setAggregateSelection(null); setSelected(id); }
+  function selectAggregate(id: number) { setAggregateSelection({ scope: mapScope, parent: id }); setSelected(id); }
+  function navigate(id: number) { setAggregateSelection(null); explorer.navigate(id); listRef.current?.scrollTo(0, 0); }
   function changePage(next: number) { explorer.changePage(next); listRef.current?.scrollTo(0, 0); }
   function changePageSize(next: number) { explorer.changePageSize(next); listRef.current?.scrollTo(0, 0); }
-  function changeView(next: 'list' | 'map') { setView(next); setSelected(null); }
+  function changeView(next: 'list' | 'map') { setView(next); selectEntry(null); }
   function showList(id: number) { setView('list'); navigate(id); }
   function moveSelection(event: KeyboardEvent<HTMLDivElement>) {
     const entries = page.entries;
@@ -46,12 +57,13 @@ export function DirectoryExplorer({ api, task, online, onError }: { api: Api | n
   }
 
   const shownDetail = selected === null ? directory : detail;
+  const aggregateDirectory = aggregate?.parent === parent ? directory : detail;
   const running = active(task);
   const crumbs = directory ? [...directory.ancestors, directory].filter(c => c.id !== 0) : [];
   return <><section className="explorer">
         <div className="explorer-top"><h2>目录与文件</h2><span>{(view === 'map' ? tree.data?.root.child_count ?? page.total : page.total).toLocaleString()} 项{view === 'list' && ' · 按大小降序'}</span>
           <div className="explorer-controls">
-            {view === 'map' && <label className="map-depth">显示层级<select aria-label="显示层级" value={depth} disabled={!online} onChange={event => { setDepth(Number(event.target.value)); setSelected(null); }}>{[1, 2, 3, 4].map(value => <option key={value} value={value}>{value} 层</option>)}</select></label>}
+            {view === 'map' && <label className="map-depth">显示层级<select aria-label="显示层级" value={depth} disabled={!online} onChange={event => { setDepth(Number(event.target.value)); selectEntry(null); }}>{[1, 2, 3, 4].map(value => <option key={value} value={value}>{value} 层</option>)}</select></label>}
             <div className="explorer-views" role="group" aria-label="查看方式"><button type="button" aria-pressed={view === 'list'} onClick={() => changeView('list')}><List size={15} />列表</button><button type="button" aria-pressed={view === 'map'} onClick={() => changeView('map')}><LayoutDashboard size={15} />空间图</button></div>
           </div>
         </div>
@@ -59,7 +71,7 @@ export function DirectoryExplorer({ api, task, online, onError }: { api: Api | n
           <div className="explorer-body">
             {view === 'map' ? <div className="map-panel" aria-busy={tree.loading}>
               {tree.error && <div className="map-error" role="alert"><span>{tree.error}</span><Button variant="outline" size="sm" disabled={!online} onClick={tree.retry}>重试</Button></div>}
-              {tree.data ? <SpaceMap root={tree.data.root} selected={selected} interactive={online} onSelect={setSelected} onNavigate={navigate} onShowList={showList} /> : <div className="list-empty">{!online ? '连接后台后可查看空间图。' : tree.error ? '空间图暂不可用，可切回列表。' : <span><LoaderCircle className="spin" size={17} /> 正在生成空间图…</span>}</div>}
+              {tree.data ? <SpaceMap root={tree.data.root} mapRef={map.ref} rectangles={map.rectangles} selected={aggregate ? null : selected} selectedAggregate={aggregate?.parent ?? null} interactive={online} onSelect={selectEntry} onSelectAggregate={selectAggregate} onNavigate={navigate} onShowList={showList} /> : <div className="list-empty">{!online ? '连接后台后可查看空间图。' : tree.error ? '空间图暂不可用，可切回列表。' : <span><LoaderCircle className="spin" size={17} /> 正在生成空间图…</span>}</div>}
               <div className="map-caption"><span>显示 {depth} 层 · 面积代表逻辑大小{tree.data?.root.zero_count ? ` · ${tree.data.root.zero_count.toLocaleString()} 项大小为 0，未绘制` : ''}</span><span>小项合并为「其他」 · 双击目录可展开</span></div>
             </div> : <div className="file-panel"><div className="table-header"><span>名称</span><span>大小 <ArrowDown size={12} /></span><span>占当前目录</span></div>
               <div ref={listRef} className="file-list" aria-busy={loadingPage} role="listbox" tabIndex={0} aria-label="目录内容，方向键选择，Enter 进入目录，退格返回" aria-activedescendant={selected === null ? undefined : `entry-${selected}`} onKeyDown={moveSelection}>
@@ -87,7 +99,14 @@ export function DirectoryExplorer({ api, task, online, onError }: { api: Api | n
               </nav>
             </div>}
             <aside className="detail-panel">
-              <div className="detail-heading">{selected === null ? '当前目录' : '条目详情'}<Info size={15} /></div>
+              <div className="detail-heading">{aggregate ? '汇总详情' : selected === null ? '当前目录' : '条目详情'}<Info size={15} /></div>
+              {aggregate ? <>
+                <h3>其他 {aggregate.count.toLocaleString()} 项</h3>
+                <p className="detail-kind">合并显示的文件与文件夹</p>
+                <dl><dt>逻辑大小合计</dt><dd className="detail-size">{formatBytes(aggregate.bytes)}</dd><dt>项目数</dt><dd>{aggregate.count.toLocaleString()} 项</dd><dt>占当前目录</dt><dd>{(tree.data?.root.logical_bytes ? aggregate.bytes / tree.data.root.logical_bytes * 100 : 0).toFixed(1)}%</dd><dt>所在目录</dt><dd className="detail-path">{aggregateDirectory ? displayPath(aggregateDirectory.path) : '正在读取…'}</dd></dl>
+                <div className="detail-buttons"><Button variant="outline" size="sm" disabled={!online} onClick={() => showList(aggregate.parent)}><List />查看所在目录列表</Button></div>
+                <div className="detail-footnote"><Info size={13} /><span>这些条目因数量较多或色块过小而合并显示。可在所在目录的完整列表中逐项查看。</span></div>
+              </> : <>
               {selected !== null && !shownDetail && <p className="detail-kind">正在读取详情…</p>}
               {shownDetail && <>
                 <h3>{shownDetail.id === 0 ? displayPath(task.root).split(/[\\/]/).filter(Boolean).at(-1) : shownDetail.name}</h3>
@@ -99,6 +118,7 @@ export function DirectoryExplorer({ api, task, online, onError }: { api: Api | n
                   {desktop.available() && <Button variant="outline" size="sm" onClick={() => desktop.reveal(displayPath(shownDetail.path)).catch(e => onError(errorText(e)))}><FolderOpen />系统定位</Button>}
                 </div>
                 <div className="detail-footnote"><Info size={13} /><span>数据来自本次扫描。文件可能已变化；重新扫描可更新结果。</span></div>
+              </>}
               </>}
             </aside>
           </div>
