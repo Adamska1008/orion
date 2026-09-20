@@ -3,9 +3,10 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { isTauri, invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
-import { Activity, ArrowDown, ArrowLeft, ArrowRight, Check, ChevronRight, Copy, File, Folder, FolderOpen, HardDrive, Info, LayoutGrid, LoaderCircle, Plug, RefreshCw, ScanLine, Settings2, ShieldCheck, Square, TriangleAlert, X } from 'lucide-react';
+import { Activity, ArrowDown, ArrowLeft, ArrowRight, Check, ChevronRight, Copy, File, Folder, FolderOpen, HardDrive, Info, LayoutGrid, LoaderCircle, Moon, Plug, RefreshCw, ScanLine, Settings2, ShieldCheck, Square, TriangleAlert, X } from 'lucide-react';
 import { Api, ApiError, validateConnection, type Connection, type Detail, type Entry, type Page, type Task } from './lib/api';
 import { cn, displayPath, formatBytes, formatDate } from './lib/utils';
+import { useTheme, type ThemePreference } from './lib/theme';
 import { Button } from './components/ui/button';
 
 const labels = { running: '正在扫描', cancelling: '正在取消', cancelled: '已取消 · 部分结果', completed: '扫描完成', failed: '扫描失败' };
@@ -18,6 +19,7 @@ function EntryIcon({ entry }: { entry: Entry }) {
 }
 
 export default function App() {
+  const [theme, setTheme] = useTheme();
   const [connection, setConnection] = useState<Connection | null>(null);
   const [connectionForm, setConnectionForm] = useState({ url: 'http://127.0.0.1:', token: '' });
   const [settings, setSettings] = useState(false);
@@ -172,6 +174,7 @@ export default function App() {
       <button className="nav-item active" onClick={() => { setSettings(false); if (task) navigate(0); }}><LayoutGrid size={17} />空间总览</button>
       <div className="sidebar-section"><span>当前扫描</span>{task ? <button title={displayPath(task.root)} className="scan-shortcut" onClick={() => navigate(0)}><Folder size={16} /><span>{displayPath(task.root).split(/[\\/]/).filter(Boolean).at(-1) || displayPath(task.root)}</span>{running && <span className="live-dot" />}</button> : <p>选择一个目录开始</p>}</div>
       <div className="sidebar-bottom">
+        <label className="theme-picker"><Moon size={15} /><span>外观</span><select aria-label="外观主题" value={theme} onChange={event => setTheme(event.target.value as ThemePreference)}><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">暗色</option></select></label>
         <div className="read-only-note"><ShieldCheck size={17} /><div>只读扫描<span>文件始终留在原处</span></div></div>
         <button className="server-button" onClick={() => setSettings(v => !v)}><span className={cn('connection-dot', online && 'connected')} /><span>{online ? '本地服务已连接' : '连接本地服务'}</span><Settings2 size={14} /></button>
         <div className="version">ORION <span>0.1 · MVP</span></div>
