@@ -17,6 +17,13 @@ describe('local API client', () => {
     expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({ root: 'C:\\资料', request_id: 'request-id' });
     expect(fetcher.mock.calls[0][1].headers.Authorization).toBe('Bearer test');
   });
+  it('sends the selected page size and offset to the server', async () => {
+    const fetcher = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ revision: 1, total: 201, offset: 150, entries: [] }) });
+    vi.stubGlobal('fetch', fetcher);
+    const api = new Api({ url: 'http://127.0.0.1:1234', token: 'test' });
+    await api.page('scan', 7, 150, 50);
+    expect(fetcher.mock.calls[0][0]).toBe('http://127.0.0.1:1234/api/v1/scans/scan/entries?parent=7&offset=150&limit=50');
+  });
   it('keeps unknown allocation distinct from zero and renders Windows paths', () => {
     expect(formatBytes(null)).toBe('未知'); expect(formatBytes(0)).toBe('0 B'); expect(formatBytes(1024)).toBe('1 KiB');
     expect(displayPath('\\\\?\\C:\\资料')).toBe('C:\\资料');

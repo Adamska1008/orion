@@ -55,8 +55,8 @@ export class Api {
   tasks(signal?: AbortSignal) { return this.request<Task[]>('/tasks', undefined, signal); }
   start(root: string, requestId: string) { return this.request<Task>('/scans', { root, request_id: requestId }); }
   cancel(id: string) { return this.request<Task>(`/tasks/${id}/cancel`, {}); }
-  page(id: string, parent: number, offset: number, signal?: AbortSignal) {
-    return this.request<Page>(`/scans/${id}/entries?parent=${parent}&offset=${offset}&limit=200`, undefined, signal);
+  page(id: string, parent: number, offset: number, limit: number, signal?: AbortSignal) {
+    return this.request<Page>(`/scans/${id}/entries?parent=${parent}&offset=${offset}&limit=${limit}`, undefined, signal);
   }
   detail(id: string, entry: number, signal?: AbortSignal) { return this.request<Detail>(`/scans/${id}/entries/${entry}`, undefined, signal); }
 }

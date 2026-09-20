@@ -32,6 +32,7 @@ export default function App() {
   const [root, setRoot] = useState('');
   const [parent, setParent] = useState(0);
   const [offset, setOffset] = useState(0);
+  const [pageSize, setPageSize] = useState(15);
   const [page, setPage] = useState<Page>(emptyPage);
   const [directory, setDirectory] = useState<Detail | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
@@ -95,32 +96,53 @@ export default function App() {
     if (!api || !task || !online) return;
     const controller = new AbortController();
     setLoadingPage(true);
-    Promise.all([api.page(task.id, parent, offset, controller.signal), api.detail(task.id, parent, controller.signal)])
+    Promise.all([api.page(task.id, parent, offset, pageSize, controller.signal), api.detail(task.id, parent, controller.signal)])
       .then(([next, dir]) => {
         if (controller.signal.aborted) return;
-        if (next.total > 0 && offset >= next.total) { setOffset(0); return; }
+        if (offset > 0 && offset >= next.total) {
+          setOffset(0); setPage({ ...emptyPage, total: next.total }); setSelected(null); setDetail(null); return;
+        }
         setPage(next); setDirectory(dir);
       }).catch(error => { if (!controller.signal.aborted) setMessage(errorText(error)); })
       .finally(() => { if (!controller.signal.aborted) setLoadingPage(false); });
     return () => controller.abort();
-  }, [api, task?.id, task?.revision, parent, offset, online]);
+  }, [api, task?.id, task?.revision, parent, offset, pageSize, online]);
 
   useEffect(() => {
     if (!api || !task || selected === null || !online) { setDetail(null); return; }
     const controller = new AbortController();
-    api.detail(task.id, selected, controller.signal).then(setDetail).catch(error => {
+    api.detail(task.id, selected, controller.signal).then(next => { if (!controller.signal.aborted) setDetail(next); }).catch(error => {
       if (!controller.signal.aborted) setMessage(errorText(error));
     });
     return () => controller.abort();
   }, [api, task?.id, task?.revision, selected, online]);
 
   const navigate = useCallback((id: number) => {
-    setParent(id); setOffset(0); setSelected(null);
+    setParent(id); setOffset(0); setSelected(null); setDetail(null);
     // Re-selecting the current first page does not trigger the loading effect.
     // Keep its results unless the directory or page actually changes.
     if (id !== parent || offset !== 0) { setPage(emptyPage); setDirectory(null); }
     listRef.current?.scrollTo(0, 0);
   }, [parent, offset]);
+
+  const pageCount = Math.max(1, Math.ceil(page.total / pageSize));
+  const pageNumber = Math.floor(offset / pageSize) + 1;
+
+  function changePage(nextPage: number) {
+    if (!online || !Number.isInteger(nextPage) || nextPage < 1 || nextPage > pageCount) return;
+    const nextOffset = (nextPage - 1) * pageSize;
+    if (nextOffset === offset) return;
+    setOffset(nextOffset); setSelected(null); setDetail(null);
+    setPage(current => ({ ...current, offset: nextOffset, entries: [] }));
+    listRef.current?.scrollTo(0, 0);
+  }
+
+  function changePageSize(nextSize: number) {
+    if (nextSize === pageSize || ![15, 50, 100].includes(nextSize)) return;
+    setPageSize(nextSize); setOffset(0); setSelected(null); setDetail(null);
+    setPage(current => ({ ...current, offset: 0, entries: [] }));
+    listRef.current?.scrollTo(0, 0);
+  }
 
   async function startScan(path = root) {
     if (!api || !online || !path.trim() || busy || active(task)) return;
@@ -216,7 +238,7 @@ export default function App() {
           <div className="breadcrumb-bar"><Button variant="ghost" size="icon" aria-label="返回上级目录" onClick={() => directory?.parent_id != null && navigate(directory.parent_id)} disabled={!directory || directory.parent_id === null}><ArrowLeft /></Button><nav aria-label="目录层级"><span><button title={displayPath(task.root)} onClick={() => navigate(0)}>{displayPath(task.root)}</button></span>{crumbs.map(c => <span key={c.id}><ChevronRight size={13} /><button title={c.name} onClick={() => navigate(c.id)}>{c.name}</button></span>)}</nav>{loadingPage && <LoaderCircle className="spin subtle" size={14} />}</div>
           <div className="explorer-body">
             <div className="file-panel"><div className="table-header"><span>名称</span><span>大小 <ArrowDown size={12} /></span><span>占当前目录</span></div>
-              <div ref={listRef} className="file-list" role="listbox" tabIndex={0} aria-label="目录内容，方向键选择，Enter 进入目录，退格返回" aria-activedescendant={selected === null ? undefined : `entry-${selected}`} onKeyDown={moveSelection}>
+              <div ref={listRef} className="file-list" aria-busy={loadingPage} role="listbox" tabIndex={0} aria-label="目录内容，方向键选择，Enter 进入目录，退格返回" aria-activedescendant={selected === null ? undefined : `entry-${selected}`} onKeyDown={moveSelection}>
                 {page.entries.length ? <div style={{ height: virtual.getTotalSize(), position: 'relative' }}>{virtual.getVirtualItems().map(row => {
                   const entry = page.entries[row.index];
                   const percentage = directory?.logical_bytes ? Math.min(100, entry.logical_bytes / directory.logical_bytes * 100) : 0;
@@ -225,7 +247,20 @@ export default function App() {
                   </div>;
                 })}</div> : <div className="list-empty">{loadingPage ? '正在读取目录…' : running ? '正在发现文件，结果会逐步出现。' : '此目录没有已统计的内容。'}</div>}
               </div>
-              <div className="pagination"><span>{page.total ? `${offset + 1}–${Math.min(offset + 200, page.total)} / ${page.total.toLocaleString()}` : '0 项'}{running && ' · 扫描中，排序会更新'}</span><div><Button variant="ghost" size="icon" aria-label="上一页" disabled={offset === 0} onClick={() => { setOffset(Math.max(0, offset - 200)); setSelected(null); listRef.current?.scrollTo(0, 0); }}><ArrowLeft /></Button><Button variant="ghost" size="icon" aria-label="下一页" disabled={offset + 200 >= page.total} onClick={() => { setOffset(offset + 200); setSelected(null); listRef.current?.scrollTo(0, 0); }}><ArrowRight /></Button></div></div>
+              <nav className="pagination" aria-label="目录分页">
+                <div className="pagination-info">
+                  <span aria-live="polite">共 {page.total.toLocaleString()} 项{page.entries.length > 0 && ` · ${offset + 1}–${offset + page.entries.length}`}</span>
+                  <label>每页<select aria-label="每页条数" value={pageSize} onChange={event => changePageSize(Number(event.target.value))} disabled={!online}><option value={15}>15</option><option value={50}>50</option><option value={100}>100</option></select>项</label>
+                </div>
+                <div className="pagination-controls">
+                  <Button variant="outline" size="sm" aria-label="上一页" disabled={!online || loadingPage || offset === 0} onClick={() => changePage(pageNumber - 1)}><ArrowLeft />上一页</Button>
+                  <form key={`${parent}:${offset}:${pageSize}`} onSubmit={event => { event.preventDefault(); changePage(Number(new FormData(event.currentTarget).get('page'))); }}>
+                    <label>第<input name="page" aria-label="跳转页码" type="number" min={1} max={pageCount} step={1} defaultValue={pageNumber} disabled={!online || page.total === 0} />/ {pageCount.toLocaleString()} 页</label>
+                    <Button type="submit" variant="ghost" size="sm" disabled={!online || loadingPage || page.total === 0}>跳转</Button>
+                  </form>
+                  <Button variant="outline" size="sm" aria-label="下一页" disabled={!online || loadingPage || offset + pageSize >= page.total} onClick={() => changePage(pageNumber + 1)}>下一页<ArrowRight /></Button>
+                </div>
+              </nav>
             </div>
             <aside className="detail-panel"><div className="detail-heading">{selected === null ? '当前目录' : '条目详情'}<Info size={15} /></div>{shownDetail && <><h3>{shownDetail.id === 0 ? displayPath(task.root).split(/[\\/]/).filter(Boolean).at(-1) : shownDetail.name}</h3><p className="detail-kind">{{ directory: '文件夹', file: '文件', link: '链接（未跟随）', other: '特殊文件' }[shownDetail.kind]}</p><dl><dt>逻辑大小</dt><dd className="detail-size">{formatBytes(shownDetail.logical_bytes)}</dd><dt>修改时间</dt><dd>{formatDate(shownDetail.modified_at)}</dd><dt>完整路径</dt><dd className="detail-path">{displayPath(shownDetail.path)}</dd></dl><div className="detail-buttons"><Button variant="outline" size="sm" onClick={async () => { try { await navigator.clipboard.writeText(displayPath(shownDetail.path)); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { setMessage('复制失败，请从详情中选择路径手动复制。'); } }}>{copied ? <Check /> : <Copy />}{copied ? '已复制' : '复制路径'}</Button>{isTauri() && <Button variant="outline" size="sm" onClick={() => revealItemInDir(displayPath(shownDetail.path)).catch(e => setMessage(errorText(e)))}><FolderOpen />系统定位</Button>}</div><div className="detail-footnote"><Info size={13} /><span>数据来自本次扫描。文件可能已变化；重新扫描可更新结果。</span></div></>}</aside>
           </div>
