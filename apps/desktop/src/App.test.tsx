@@ -79,7 +79,7 @@ function expectRootVisible() {
 }
 
 describe('completed scan navigation', () => {
-  it.each(['.nav-item', '.scan-shortcut', 'nav[aria-label="目录层级"] button'])(
+  it.each(['nav[aria-label="目录层级"] button'])(
     'keeps the root results when repeatedly clicking %s', async selector => {
       expectRootVisible();
       const requests = vi.mocked(Api.prototype.page).mock.calls.length;
@@ -98,16 +98,16 @@ describe('completed scan navigation', () => {
     expect(container.querySelector('[role="listbox"]')?.textContent).toContain('photo.jpg');
     await click('nav[aria-label="目录层级"] span:last-child button');
     expect(container.querySelector('[role="listbox"]')?.textContent).toContain('photo.jpg');
-    await click('.nav-item');
+    await click('nav[aria-label="目录层级"] span:first-child button');
     expectRootVisible();
-    await click('.nav-item');
+    await click('nav[aria-label="目录层级"] span:first-child button');
     expectRootVisible();
   });
 
   it('returns to the first root page from a later page', async () => {
     await click('[aria-label="下一页"]');
     expect(container.querySelector('[role="listbox"]')?.textContent).toContain('last.txt');
-    await click('.nav-item');
+    await click('nav[aria-label="目录层级"] span:first-child button');
     expectRootVisible();
     expect(Api.prototype.page).toHaveBeenLastCalledWith(task.id, 0, 0, expect.any(AbortSignal));
   });
@@ -115,17 +115,17 @@ describe('completed scan navigation', () => {
   it('clears the selection while preserving the current directory results', async () => {
     await click('[role="option"]');
     expect(container.querySelector('.detail-path')?.textContent).toBe(childDirectory.path);
-    await click('.nav-item');
+    await click('nav[aria-label="目录层级"] span:first-child button');
     expectRootVisible();
     expect(container.querySelector('[role="option"]')?.getAttribute('aria-selected')).toBe('false');
   });
 
-  it('keeps a pending root request when overview is clicked again', async () => {
+  it('keeps a pending root request when the root breadcrumb is clicked again', async () => {
     await click('[aria-label="进入 photos"]');
     let resolvePage!: (page: Page) => void;
     vi.mocked(Api.prototype.page).mockImplementationOnce(() => new Promise(resolve => { resolvePage = resolve; }));
-    await click('.nav-item');
-    await click('.nav-item');
+    await click('nav[aria-label="目录层级"] span:first-child button');
+    await click('nav[aria-label="目录层级"] span:first-child button');
     await act(async () => { resolvePage(rootPage); });
     expectRootVisible();
   });
