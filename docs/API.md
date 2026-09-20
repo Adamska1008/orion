@@ -1,12 +1,13 @@
 # Orion · 本地 API v1
 
-Server 默认监听 `http://127.0.0.1:43120`，所有接口需要 `Authorization: Bearer <token>`。连接信息写入启动输出指明的本地文件；令牌每次启动重新生成。不要把令牌写入 URL 或提交到仓库。
+独立 Server 默认监听 `http://127.0.0.1:43120`；桌面自动启动的 Server 使用动态端口，连接文件为 `%LOCALAPPDATA%\dev.orion.desktop\runtime\connection.json`。所有接口需要 `Authorization: Bearer <token>`。连接文件包含 `url`、`token`、`instance_id`；令牌每次启动重新生成。不要把令牌写入 URL 或提交到仓库。
 
 ## 接口
 
 | 方法 | 路径（前缀 `/api/v1`） | 行为 |
 | --- | --- | --- |
-| GET | `/health` | 服务名称、API 版本、`instance_id`；服务重启后实例标识变化 |
+| GET | `/health` | 服务名称、API 版本、程序 `version`、`capabilities`、`instance_id`；服务重启后实例标识变化 |
+| POST | `/server/shutdown` | 接收 `{ "instance_id": "UUID", "cancel_active": false }`，正常停止后台；见下文 |
 | GET | `/tasks` | 当前保留的扫描任务数组，长度为 0 或 1 |
 | POST | `/scans` | 接收 `{ "root": "C:\\Data", "request_id": "UUID" }`，返回扫描任务 |
 | GET | `/tasks/{id}` | 查询任务、进度、完整性与错误摘要 |
@@ -25,6 +26,14 @@ Server 默认监听 `http://127.0.0.1:43120`，所有接口需要 `Authorization
 - 一个服务同时只运行一个扫描。冲突请求返回 HTTP 409、`scan_in_progress` 和现有 `task_id`。
 - 超时重试必须复用 `request_id`。同一个键和同一个原始 `root` 字符串返回原任务；换范围返回 409。旧结果被新扫描替换后，同一个键返回 410，不再次执行。
 - 只保留最近一次扫描索引。新扫描替换旧结果，但本次服务的请求标识仍保留，最多 1024 个；达到限制需要重启。客户端关闭不取消扫描；服务退出丢失所有任务与请求标识。
+
+## 后台退出
+
+`/health` 的 `capabilities` 包含 `graceful_shutdown`。退出请求必须携带当前 `instance_id`；标识不符返回 409 `instance_changed`。有扫描运行或正在取消时，`cancel_active: false`（默认值）返回 409 `scan_in_progress`，后台继续工作。用户确认后传 `true`，Server 请求取消并等待扫描工作线程退出。
+
+接受退出请求后返回 202，重复请求无副作用；此时新的扫描请求返回 503 `server_shutting_down`。202 表示接受退出，不代表进程已经停止。当前任务收尾、HTTP 请求结束后移除连接文件并退出。单次阻塞的文件系统调用仍可能延迟退出；桌面等待超时会保留托盘并提示重试，不强杀进程。
+
+点击桌面窗口 X 只隐藏窗口；托盘“退出 Orion”调用上述接口。其他客户端连接该 Server 时也会断开，当前内存结果丢失。CLI / MCP 等后续适配层可使用同一接口，不依赖桌面窗口。
 
 ## 查询与完整性
 

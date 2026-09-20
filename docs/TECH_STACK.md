@@ -4,7 +4,7 @@
 
 已采用：独立 Rust Server（Axum + Tokio），本地 HTTP / JSON API；GUI 使用 Tauri + React + TypeScript + Vite、shadcn/ui 风格的源码组件 + Tailwind、TanStack Virtual。后续 CLI / MCP 复用同一 API。
 
-开发运行采用两个普通终端，分别执行 `cargo run -p orion-server` 和 `npm run desktop`，不使用自定义启动或停止脚本。具体步骤见 [README](../README.md)，已实现接口见 [API](API.md)。
+开发时先 `cargo build -p orion-server`，再 `npm run desktop`。Tauri 自动启动或重连独立 Server，不使用自定义启动或停止脚本；后端仍可单独运行。具体步骤见 [README](../README.md)，已实现接口见 [API](API.md)。
 
 ## 建议组合
 
@@ -50,6 +50,8 @@ GUI、CLI 和 MCP 都通过同一套 API 使用后端，不在各入口嵌入独
 ### 服务边界
 
 - 本地单用户服务与系统常驻服务是不同的部署选择，启动方式不改变后端对任务状态的所有权。
+- 当前由 Tauri 管理系统托盘和 Server 启停。窗口关闭时隐藏，桌面进程继续运行；托盘退出通过已认证 API 停止后台，扫描中先确认。桌面使用单实例插件，Server 用连接文件锁防止重复管理同一后台；没有 Windows 服务或开机启动项。
+- 桌面使用用户本地数据目录中的固定连接文件发现后台，动态端口避免冲突；桌面崩溃后可重连存活的后台，Server 重启仍丢失内存结果。
 - 客户端必须能区分服务未启动、连接中断和任务失败。重连后按标识查询原任务，不能因请求超时就认定操作未执行。
 - 数据查询支持分页；耗时扫描在后台执行，API 保持响应。
 - 本地 HTTP 仅绑定 `127.0.0.1`，使用每次启动生成的随机 Bearer 令牌；凭据写入当前用户受限目录。浏览器来源白名单只涵盖 Vite 开发地址与 Tauri。回环监听和 CORS 均不代替认证。
@@ -83,7 +85,7 @@ GUI、CLI 和 MCP 都通过同一套 API 使用后端，不在各入口嵌入独
 - **Windows Named Pipe：** 避免 TCP 端口分配，可通过 Windows 安全描述符控制访问；仍需明确配置权限，不是自动仅允许当前用户访问。GUI 可由 Tauri 原生侧转发，转发本身不构成第二套业务后端。[Microsoft 权限说明](https://learn.microsoft.com/en-us/windows/win32/ipc/named-pipe-security-and-access-rights)
 - **gRPC / Protobuf：** 若契约生成和流式通信收益足够，再考虑其额外工具链。React WebView 路径还需评估 gRPC-Web 或原生桥接，不假定浏览器可以直接使用原生 gRPC。[gRPC-Web 协议说明](https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-WEB.md)
 
-首轮采用 HTTP / JSON：React 直接连接，后续 CLI / MCP 可直接复用且方便调试；暂不引入桥接层、Protobuf 或推送通道。默认端口 43120，连接文件提供地址与令牌；进度以 800 ms 间隔轮询，避免请求重叠。依赖的准确版本记录在 Cargo.lock / package-lock.json。[Axum 服务入口](https://docs.rs/axum/latest/axum/fn.serve.html)
+首轮采用 HTTP / JSON：React 直接连接，后续 CLI / MCP 可直接复用且方便调试；暂不引入桥接层、Protobuf 或推送通道。独立启动默认端口 43120，桌面管理时使用动态端口，连接文件提供地址与令牌；界面进度以 800 ms 间隔轮询，托盘状态每 2 秒查询一次。依赖的准确版本记录在 Cargo.lock / package-lock.json。[Axum 服务入口](https://docs.rs/axum/latest/axum/fn.serve.html)
 
 ## GUI 选择：优先支持界面探索
 

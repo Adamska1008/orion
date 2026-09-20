@@ -12,21 +12,25 @@ Windows 优先的只读磁盘空间浏览器。独立 Rust Server 负责扫描�
 npm ci
 ```
 
-在项目根目录打开两个终端。终端一运行后端，保持终端打开：
+在项目根目录先编译后端，再启动桌面开发模式：
 
 ```powershell
-cargo run -p orion-server
+cargo build -p orion-server
 ```
 
-终端二运行桌面客户端：
+桌面会自动启动同目录下的后端程序：
 
 ```powershell
 npm run desktop
 ```
 
-选择目录后即可扫描、按大小浏览、进入子目录、查看详情或取消。关闭 GUI 不停止后端；在后端终端按 Ctrl+C 停止服务。使用普通开发命令，不提供自动后台启动、停止进程或修改系统启动项的脚本。
+选择目录后即可扫描、按大小浏览、进入子目录、查看详情或取消。点击窗口 X 会隐藏到系统托盘，扫描继续；单击托盘图标或再次打开应用会恢复窗口。右键托盘选择“退出 Orion”才会关闭后台；扫描中会确认是否停止扫描并退出。托盘菜单和提示显示后台状态。
 
-服务默认只监听 `127.0.0.1:43120`，随机令牌保存在项目 `.orion/connection-43120.json`，该目录限制当前 Windows 用户访问且已被 Git 忽略。GUI 从工作目录及其上级查找连接文件。端口占用时明确报错，不结束占用它的进程。可通过 `ORION_PORT`、`ORION_RUNTIME_DIR`、`ORION_CONNECTION_FILE` 手动覆盖开发配置；连接文件不要提交或分享。
+桌面管理的后台只监听 `127.0.0.1`，使用系统分配的空闲端口。连接信息和日志放在 `%LOCALAPPDATA%\dev.orion.desktop\runtime`（`connection.json` / `server.log`），凭据目录限制当前 Windows 用户访问。桌面异常退出后，再打开会重连存活的后台；后台异常退出后，可在连接设置中点击“重新连接后台”。连接文件不要提交或分享。
+
+独立调试后端仍可运行 `cargo run -p orion-server`，默认端口为 43120，连接文件为项目 `.orion/connection-43120.json`，在其终端按 Ctrl+C 停止。GUI 默认管理自己的后台；如需连接手动启动的 Server，在启动 GUI 的终端设置 `ORION_CONNECTION_FILE` 为该连接文件的绝对路径。此模式只连接已有后台，托盘退出也会停止它。Server 必须使用支持退出 API 的新版。
+
+`ORION_RUNTIME_DIR` 可隔离开发数据目录，`ORION_SCAN_WORKERS` 配置扫描线程；独立 Server 还支持 `ORION_PORT`。Server 设置 `ORION_CONNECTION_FILE` 时，该文件必须在 `ORION_RUNTIME_DIR` 内。没有自定义启动脚本、开机启动项或 Windows 服务。开发热重载可能重连现有后台；修改后端代码后，需先从托盘退出、重新编译，再启动桌面。
 
 扫描默认使用最多 4 个目录工作线程（不超过可用 CPU 并行度），每批最多 256 个条目更新索引。可在启动 Server 前设置 `ORION_SCAN_WORKERS` 为 1–16；例如 `$env:ORION_SCAN_WORKERS = '8'`，重启 Server 后生效，启动输出会显示实际配置。设置为 1 仍保留批量更新，适合比较并发本身的收益。
 
@@ -39,14 +43,14 @@ Windows 桌面客户端支持 `Ctrl+-` 缩小、`Ctrl++`（或 `Ctrl+=`）放大
 ## 常规检查
 
 ```powershell
-cargo test -p orion-core -p orion-server
+cargo test -p orion-core -p orion-server -p orion-desktop
 cargo fmt --all --check
-cargo clippy -p orion-core -p orion-server --all-targets -- -D warnings
+cargo clippy -p orion-core -p orion-server -p orion-desktop --all-targets -- -D warnings
 npm test
 npm run build
 ```
 
-生成包含前端资源的本机调试程序：先 `npm run build`，再 `cargo build -p orion-desktop --features custom-protocol`。开发热更新使用前述 `npm run desktop`。
+生成包含前端资源的本机调试程序：先 `npm run build`，再 `cargo build -p orion-server -p orion-desktop --features orion-desktop/custom-protocol`。开发热更新使用前述 `npm run desktop`。生命周期集成测试使用隔离临时目录和临时端口，不操作正在使用的 Orion。
 
 ## Release 试用
 
@@ -56,13 +60,9 @@ npm run build
 cargo build --locked --release -p orion-server -p orion-desktop --features orion-desktop/custom-protocol
 ```
 
-产物是 `target/release/orion-server.exe` 和 `target/release/orion-desktop.exe`。两者均为 Release；界面资源已嵌入，不需要 Vite 开发服务。
+产物是 `target/release/orion-server.exe` 和 `target/release/orion-desktop.exe`。两者放在同一目录，双击 `orion-desktop.exe` 即可，后端会自动启动且不弹出控制台。界面资源已嵌入，不需要 Vite 开发服务；目前是便携版，仍需系统具备 WebView2。
 
-测试前先结束旧扫描并关闭旧客户端，在旧 Server 的终端按 Ctrl+C 停止服务。在项目根目录的两个终端分别运行：
-
-```powershell
-.\target\release\orion-server.exe
-```
+升级前先从托盘退出旧版；没有托盘的旧版需关闭客户端，并在旧 Server 终端按 Ctrl+C。然后双击新版桌面程序，或运行：
 
 ```powershell
 .\target\release\orion-desktop.exe

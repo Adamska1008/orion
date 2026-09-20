@@ -20,6 +20,7 @@ use uuid::Uuid;
 struct Tasks {
     latest: Option<Arc<Scan>>,
     requests: HashMap<Uuid, (String, Uuid)>,
+    shutting_down: bool,
 }
 
 #[derive(Clone)]
@@ -28,6 +29,7 @@ pub struct AppState {
     pub instance_id: Uuid,
     tasks: Arc<Mutex<Tasks>>,
     scan_workers: usize,
+    shutdown: Arc<tokio::sync::Notify>,
 }
 
 impl AppState {
@@ -37,12 +39,59 @@ impl AppState {
             instance_id: Uuid::new_v4(),
             tasks: Default::default(),
             scan_workers: orion_core::default_scan_workers(),
+            shutdown: Default::default(),
         }
     }
 
     pub fn with_scan_workers(mut self, workers: usize) -> Self {
         self.scan_workers = workers.clamp(1, orion_core::MAX_SCAN_WORKERS);
         self
+    }
+
+    pub fn begin_shutdown(&self, cancel_active: bool) -> Result<(), ApiError> {
+        let mut tasks = self.tasks.lock().unwrap();
+        if tasks.shutting_down {
+            return Ok(());
+        }
+        if let Some(scan) = tasks
+            .latest
+            .as_ref()
+            .filter(|scan| scan.summary().status.active())
+        {
+            if !cancel_active {
+                return Err(ApiError::new(
+                    StatusCode::CONFLICT,
+                    "scan_in_progress",
+                    "扫描仍在进行，请确认停止扫描后退出。",
+                )
+                .with_task(scan.id));
+            }
+            scan.cancel();
+        }
+        // Serialize with start(): no new scan may sneak in after the exit check.
+        tasks.shutting_down = true;
+        self.shutdown.notify_one();
+        Ok(())
+    }
+
+    pub async fn shutdown_requested(&self) {
+        self.shutdown.notified().await;
+    }
+
+    pub async fn wait_for_scan_exit(&self) {
+        loop {
+            let active = self
+                .tasks
+                .lock()
+                .unwrap()
+                .latest
+                .as_ref()
+                .is_some_and(|scan| scan.summary().status.active());
+            if !active {
+                return;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+        }
     }
 
     fn task(&self, id: Uuid) -> Result<Arc<Scan>, ApiError> {
@@ -64,6 +113,13 @@ impl AppState {
 
     fn start(&self, request: StartScan) -> Result<Summary, ApiError> {
         let mut tasks = self.tasks.lock().unwrap();
+        if tasks.shutting_down {
+            return Err(ApiError::new(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "server_shutting_down",
+                "后台正在退出，无法开始新扫描。",
+            ));
+        }
         if let Some((root, id)) = tasks.requests.get(&request.request_id) {
             if root != &request.root {
                 return Err(ApiError::new(
@@ -227,6 +283,7 @@ pub fn router(state: AppState) -> Router {
         .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE]);
     Router::new()
         .route("/api/v1/health", get(health))
+        .route("/api/v1/server/shutdown", post(shutdown))
         .route("/api/v1/tasks", get(tasks))
         .route("/api/v1/scans", post(start))
         .route("/api/v1/tasks/{id}", get(task))
@@ -243,8 +300,32 @@ pub fn router(state: AppState) -> Router {
 
 async fn health(State(state): State<AppState>) -> Json<serde_json::Value> {
     Json(
-        serde_json::json!({ "name": "orion-server", "api_version": 1, "instance_id": state.instance_id }),
+        serde_json::json!({ "name": "orion-server", "api_version": 1, "instance_id": state.instance_id,
+            "version": env!("CARGO_PKG_VERSION"), "capabilities": ["graceful_shutdown"] }),
     )
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ShutdownRequest {
+    instance_id: Uuid,
+    #[serde(default)]
+    cancel_active: bool,
+}
+
+async fn shutdown(
+    State(state): State<AppState>,
+    Json(request): Json<ShutdownRequest>,
+) -> Result<StatusCode, ApiError> {
+    if request.instance_id != state.instance_id {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            "instance_changed",
+            "后台实例已变化，请重新连接后再退出。",
+        ));
+    }
+    state.begin_shutdown(request.cancel_active)?;
+    Ok(StatusCode::ACCEPTED)
 }
 
 async fn tasks(State(state): State<AppState>) -> Json<Vec<Summary>> {
@@ -355,6 +436,129 @@ mod tests {
     use axum::{body::Body, http::Request};
     use http_body_util::BodyExt;
     use tower::ServiceExt;
+
+    async fn request_shutdown(
+        state: &AppState,
+        instance: Uuid,
+        cancel: bool,
+        authenticated: bool,
+    ) -> Response {
+        let mut request = Request::builder()
+            .method("POST")
+            .uri("/api/v1/server/shutdown")
+            .header("Content-Type", "application/json");
+        if authenticated {
+            request = request.header("Authorization", "Bearer test-token");
+        }
+        router(state.clone())
+            .oneshot(
+                request
+                    .body(Body::from(
+                        serde_json::json!({"instance_id": instance, "cancel_active": cancel})
+                            .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn shutdown_requires_credentials_and_the_current_instance() {
+        let state = AppState::new("test-token".into());
+        assert_eq!(
+            request_shutdown(&state, state.instance_id, true, false)
+                .await
+                .status(),
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            request_shutdown(&state, Uuid::new_v4(), true, true)
+                .await
+                .status(),
+            StatusCode::CONFLICT
+        );
+        assert!(!state.tasks.lock().unwrap().shutting_down);
+        assert_eq!(
+            request_shutdown(&state, state.instance_id, false, true)
+                .await
+                .status(),
+            StatusCode::ACCEPTED
+        );
+        assert_eq!(
+            request_shutdown(&state, state.instance_id, false, true)
+                .await
+                .status(),
+            StatusCode::ACCEPTED
+        );
+        // The notification must survive a request arriving before the shutdown future polls.
+        tokio::time::timeout(
+            std::time::Duration::from_secs(1),
+            state.shutdown_requested(),
+        )
+        .await
+        .unwrap();
+        state.wait_for_scan_exit().await;
+        let error = state
+            .start(StartScan {
+                root: "unused".into(),
+                request_id: Uuid::new_v4(),
+            })
+            .err()
+            .unwrap();
+        assert_eq!(error.body.code, "server_shutting_down");
+    }
+
+    #[tokio::test]
+    async fn active_scan_needs_confirmation_and_shutdown_waits_for_workers() {
+        let directory = tempfile::tempdir().unwrap();
+        let scan = Scan::new(directory.path()).unwrap();
+        let state = AppState::new("test-token".into());
+        // Delay starting the worker so this exercises the cancellation race deterministically.
+        state.tasks.lock().unwrap().latest = Some(scan.clone());
+        assert_eq!(
+            request_shutdown(&state, state.instance_id, false, true)
+                .await
+                .status(),
+            StatusCode::CONFLICT
+        );
+        assert!(!state.tasks.lock().unwrap().shutting_down);
+        assert_eq!(scan.summary().status, orion_core::Status::Running);
+        assert_eq!(
+            request_shutdown(&state, state.instance_id, true, true)
+                .await
+                .status(),
+            StatusCode::ACCEPTED
+        );
+        assert_eq!(scan.summary().status, orion_core::Status::Cancelling);
+        assert!(tokio::time::timeout(
+            std::time::Duration::from_millis(50),
+            state.wait_for_scan_exit()
+        )
+        .await
+        .is_err());
+        tokio::task::spawn_blocking(move || scan.run())
+            .await
+            .unwrap();
+        tokio::time::timeout(
+            std::time::Duration::from_secs(1),
+            state.wait_for_scan_exit(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            state
+                .tasks
+                .lock()
+                .unwrap()
+                .latest
+                .as_ref()
+                .unwrap()
+                .summary()
+                .status,
+            orion_core::Status::Cancelled
+        );
+    }
 
     #[tokio::test]
     async fn authentication_and_cors_are_enforced() {

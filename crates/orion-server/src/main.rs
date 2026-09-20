@@ -56,29 +56,63 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         uuid::Uuid::new_v4().simple()
     );
     let state = orion_server::AppState::new(token.clone()).with_scan_workers(scan_workers);
-    let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, port)).await?;
-    let url = format!("http://{}", listener.local_addr()?);
-    // Each instance gets its own credential file; concurrent servers cannot overwrite it.
     let directory = std::env::var_os("ORION_RUNTIME_DIR")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| ".orion".into());
     private_directory(&directory)?;
-    let connection = directory.join(format!("connection-{}.json", listener.local_addr()?.port()));
+    // Managed desktops use one stable discovery file even with a dynamically selected port.
+    let managed_connection =
+        std::env::var_os("ORION_CONNECTION_FILE").map(std::path::PathBuf::from);
+    let _instance_lock = if let Some(path) = &managed_connection {
+        let parent = path
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+            .unwrap_or(Path::new("."));
+        if fs::canonicalize(parent)? != fs::canonicalize(&directory)? {
+            return Err("ORION_CONNECTION_FILE must be inside ORION_RUNTIME_DIR".into());
+        }
+        let file = fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .read(true)
+            .write(true)
+            .open(path.with_extension("lock"))?;
+        file.try_lock()
+            .map_err(|_| "another server owns this connection file")?;
+        Some(file)
+    } else {
+        None
+    };
+    let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, port)).await?;
+    let url = format!("http://{}", listener.local_addr()?);
+    let connection = managed_connection.unwrap_or_else(|| {
+        directory.join(format!(
+            "connection-{}.json",
+            listener.local_addr().unwrap().port()
+        ))
+    });
+    let pending = connection.with_extension("pending");
     fs::write(
-        &connection,
+        &pending,
         serde_json::to_vec(
             &serde_json::json!({"url":url,"token":token,"instance_id":state.instance_id}),
         )?,
     )?;
+    fs::rename(&pending, &connection)?;
     println!("Orion Server listening at {url}");
     println!("Scan workers: {scan_workers}");
     println!(
         "Connection file: {}",
         fs::canonicalize(&connection)?.display()
     );
+    let shutdown_state = state.clone();
     let result = axum::serve(listener, orion_server::router(state))
-        .with_graceful_shutdown(async {
-            let _ = tokio::signal::ctrl_c().await;
+        .with_graceful_shutdown(async move {
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => { let _ = shutdown_state.begin_shutdown(true); }
+                _ = shutdown_state.shutdown_requested() => {}
+            }
+            shutdown_state.wait_for_scan_exit().await;
         })
         .await;
     let _ = fs::remove_file(connection);
