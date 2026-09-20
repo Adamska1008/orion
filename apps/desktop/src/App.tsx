@@ -109,9 +109,12 @@ export default function App() {
   }, [api, task?.id, task?.revision, selected, online]);
 
   const navigate = useCallback((id: number) => {
-    setParent(id); setOffset(0); setSelected(null); setPage(emptyPage); setDirectory(null);
+    setParent(id); setOffset(0); setSelected(null);
+    // Re-selecting the current first page does not trigger the loading effect.
+    // Keep its results unless the directory or page actually changes.
+    if (id !== parent || offset !== 0) { setPage(emptyPage); setDirectory(null); }
     listRef.current?.scrollTo(0, 0);
-  }, []);
+  }, [parent, offset]);
 
   async function startScan(path = root) {
     if (!api || !online || !path.trim() || busy || active(task)) return;
