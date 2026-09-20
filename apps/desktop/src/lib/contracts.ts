@@ -12,6 +12,11 @@ export interface Entry {
 }
 export interface Detail extends Entry { path: string; ancestors: Entry[] }
 export interface Page { revision: number; total: number; offset: number; entries: Entry[] }
+export interface TreemapNode extends Entry {
+  child_count: number; zero_count: number; expanded: boolean;
+  omitted_count: number; omitted_bytes: number; children: TreemapNode[];
+}
+export interface Treemap { revision: number; depth: number; root: TreemapNode }
 export interface Health { name: string; api_version: number; instance_id: string; version: string; capabilities: string[] }
 
 export interface ErrorBody { code: string; message: string; task_id: string | null }
@@ -69,6 +74,24 @@ export function decodePage(value: unknown): Page {
 export function decodeDetail(value: unknown): Detail {
   const item = object(value);
   return { ...decodeEntry(value), path: text(item.path), ancestors: array(item.ancestors, decodeEntry) };
+}
+export function decodeTreemap(value: unknown): Treemap {
+  const item = object(value);
+  const depth = number(item.depth);
+  if (depth < 1 || depth > 4) throw new Error('Invalid tree depth');
+  let count = 0;
+  function node(value: unknown, level: number): TreemapNode {
+    if (level > depth || ++count > 2048) throw new Error('Tree exceeds bounds');
+    const item = object(value);
+    const entry = decodeEntry(item);
+    const children = array(item.children, child => node(child, level + 1));
+    const result = { ...entry, child_count: number(item.child_count), zero_count: number(item.zero_count),
+      expanded: boolean(item.expanded), omitted_count: number(item.omitted_count), omitted_bytes: number(item.omitted_bytes), children };
+    if (children.some(child => child.parent_id !== entry.id)) throw new Error('Invalid parent');
+    if (result.expanded && (entry.kind !== 'directory' || children.length + result.zero_count + result.omitted_count !== result.child_count)) throw new Error('Invalid child count');
+    return result;
+  }
+  return { revision: number(item.revision), depth, root: node(item.root, 0) };
 }
 export function decodeHealth(value: unknown): Health {
   const item = object(value);

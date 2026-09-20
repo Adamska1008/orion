@@ -11,7 +11,9 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use contracts::{ErrorBody, HealthResponse, ListQuery, ShutdownRequest, StartScanRequest};
+use contracts::{
+    ErrorBody, HealthResponse, ListQuery, ShutdownRequest, StartScanRequest, TreemapQuery,
+};
 use orion_core::{QueryError, Summary};
 use tower_http::cors::CorsLayer;
 use uuid::Uuid;
@@ -157,6 +159,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/tasks/{id}", get(task))
         .route("/api/v1/tasks/{id}/cancel", post(cancel))
         .route("/api/v1/scans/{id}/entries", get(entries))
+        .route("/api/v1/scans/{id}/treemap", get(treemap))
         .route("/api/v1/scans/{id}/entries/{entry}", get(detail))
         .fallback(|| async {
             ApiError::new(StatusCode::NOT_FOUND, "route_not_found", "未知 API 路径。")
@@ -258,6 +261,33 @@ async fn entries(
     })?
     .map(Json)
     .map_err(Into::into)
+}
+
+async fn treemap(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+    Query(query): Query<TreemapQuery>,
+) -> Result<Json<orion_core::Treemap>, ApiError> {
+    let depth = query.depth.unwrap_or(2);
+    if !(1..=4).contains(&depth) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "invalid_depth",
+            "空间图显示层级应为 1–4。",
+        ));
+    }
+    let scan = state.coordinator.task(id)?;
+    tokio::task::spawn_blocking(move || scan.treemap(query.parent, depth))
+        .await
+        .map_err(|_| {
+            ApiError::new(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "internal_error",
+                "空间图查询失败。",
+            )
+        })?
+        .map(Json)
+        .map_err(Into::into)
 }
 
 async fn detail(
@@ -493,5 +523,43 @@ mod tests {
         let body = response.into_body().collect().await.unwrap().to_bytes();
         let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(list[0]["id"], responses[0]["id"]);
+    }
+
+    #[tokio::test]
+    async fn treemap_requires_auth_validates_depth_and_returns_a_snapshot() {
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::create_dir(temp.path().join("nested")).unwrap();
+        std::fs::write(temp.path().join("nested/file"), [0; 37]).unwrap();
+        let scan = Scan::new(temp.path()).unwrap();
+        scan.run();
+        let state = AppState::new("test-token".into());
+        state.coordinator.set_scan_for_test(scan.clone());
+        let app = router(state);
+        for (suffix, auth, expected) in [
+            ("?depth=2", false, StatusCode::UNAUTHORIZED),
+            ("?depth=0", true, StatusCode::BAD_REQUEST),
+            ("?depth=5", true, StatusCode::BAD_REQUEST),
+            ("?parent=999", true, StatusCode::NOT_FOUND),
+            ("?depth=2", true, StatusCode::OK),
+        ] {
+            let mut request =
+                Request::builder().uri(format!("/api/v1/scans/{}/treemap{suffix}", scan.id));
+            if auth {
+                request = request.header("Authorization", "Bearer test-token");
+            }
+            let response = app
+                .clone()
+                .oneshot(request.body(Body::empty()).unwrap())
+                .await
+                .unwrap();
+            assert_eq!(response.status(), expected);
+            if expected == StatusCode::OK {
+                let body = response.into_body().collect().await.unwrap().to_bytes();
+                let tree: serde_json::Value = serde_json::from_slice(&body).unwrap();
+                assert_eq!(tree["root"]["logical_bytes"], 37);
+                assert_eq!(tree["root"]["children"][0]["children"][0]["name"], "file");
+                assert_eq!(tree["revision"], scan.summary().revision);
+            }
+        }
     }
 }

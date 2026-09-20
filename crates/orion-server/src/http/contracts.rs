@@ -25,7 +25,7 @@ impl HealthResponse {
             api_version: 1,
             instance_id,
             version: env!("CARGO_PKG_VERSION"),
-            capabilities: vec!["graceful_shutdown"],
+            capabilities: vec!["graceful_shutdown", "treemap"],
         }
     }
 }
@@ -62,10 +62,19 @@ pub(super) struct ListQuery {
     pub revision: Option<u64>,
 }
 
+#[derive(Default, Deserialize)]
+pub(super) struct TreemapQuery {
+    #[serde(default)]
+    pub parent: usize,
+    pub depth: Option<usize>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use orion_core::{Detail, EntryView, Kind, Page, ScanIssue, Status, Summary};
+    use orion_core::{
+        Detail, EntryView, Kind, Page, ScanIssue, Status, Summary, Treemap, TreemapNode,
+    };
 
     #[test]
     fn serialized_responses_match_the_shared_client_contract() {
@@ -120,6 +129,10 @@ mod tests {
             "tasks": tasks,
             "page": Page { revision: 7, total: entries.len(), offset: 0, entries: entries.clone() },
             "detail": Detail { entry: entries[1].clone(), path: "C:\\data\\entry-1".into(), ancestors: vec![entries[0].clone()] },
+            "treemap": Treemap { revision: 7, depth: 2, root: TreemapNode {
+                entry: entries[0].clone(), child_count: 1, zero_count: 0, expanded: true, omitted_count: 0, omitted_bytes: 0,
+                children: vec![TreemapNode { entry: entries[1].clone(), child_count: 0, zero_count: 0, expanded: false, omitted_count: 0, omitted_bytes: 0, children: vec![] }],
+            }},
             "errors": [ErrorBody { code: "scan_in_progress".into(), message: "fixture conflict".into(), task_id: Some(id) }, ErrorBody { code: "stale_revision".into(), message: "fixture stale".into(), task_id: None }],
         });
         let expected: serde_json::Value =

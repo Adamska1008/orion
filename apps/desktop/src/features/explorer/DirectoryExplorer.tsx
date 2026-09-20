@@ -1,12 +1,14 @@
 import { useRef, useState, type KeyboardEvent } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { ArrowDown, ArrowLeft, ArrowRight, Check, ChevronRight, Copy, File, Folder, FolderOpen, Info, LoaderCircle, TriangleAlert } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowRight, Check, ChevronRight, Copy, File, Folder, FolderOpen, Info, LayoutDashboard, List, LoaderCircle, TriangleAlert } from 'lucide-react';
 import { type Api, type Entry, type Task } from '../../lib/api';
 import { desktop, errorText } from '../../lib/desktop';
 import { cn, displayPath, formatBytes, formatDate } from '../../lib/utils';
 import { Button } from '../../components/ui/button';
 import { active } from '../scan/useScanTask';
 import { useExplorer } from './useExplorer';
+import { useTreemap } from './useTreemap';
+import { SpaceMap } from './SpaceMap';
 
 function EntryIcon({ entry }: { entry: Entry }) {
   return entry.kind === 'directory' ? <Folder className="entry-icon folder-icon" /> : <File className="entry-icon file-icon" />;
@@ -15,6 +17,9 @@ function EntryIcon({ entry }: { entry: Entry }) {
 export function DirectoryExplorer({ api, task, online, onError }: { api: Api | null; task: Task; online: boolean; onError: (message: string) => void }) {
   const explorer = useExplorer(api, task, online, onError);
   const { parent, offset, pageSize, page, directory, selected, detail, loadingPage, pageCount, pageNumber, setSelected } = explorer;
+  const [view, setView] = useState<'list' | 'map'>('list');
+  const [depth, setDepth] = useState(2);
+  const tree = useTreemap(api, task, parent, depth, view === 'map', online);
   const [showIssues, setShowIssues] = useState(false);
   const [copied, setCopied] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
@@ -22,6 +27,8 @@ export function DirectoryExplorer({ api, task, online, onError }: { api: Api | n
   function navigate(id: number) { explorer.navigate(id); listRef.current?.scrollTo(0, 0); }
   function changePage(next: number) { explorer.changePage(next); listRef.current?.scrollTo(0, 0); }
   function changePageSize(next: number) { explorer.changePageSize(next); listRef.current?.scrollTo(0, 0); }
+  function changeView(next: 'list' | 'map') { setView(next); setSelected(null); }
+  function showList(id: number) { setView('list'); navigate(id); }
   function moveSelection(event: KeyboardEvent<HTMLDivElement>) {
     const entries = page.entries;
     const current = entries.findIndex(e => e.id === selected);
@@ -38,14 +45,23 @@ export function DirectoryExplorer({ api, task, online, onError }: { api: Api | n
     if (entries[next]) { setSelected(entries[next].id); virtual.scrollToIndex(next); }
   }
 
-  const shownDetail = detail ?? directory;
+  const shownDetail = selected === null ? directory : detail;
   const running = active(task);
   const crumbs = directory ? [...directory.ancestors, directory].filter(c => c.id !== 0) : [];
   return <><section className="explorer">
-        <div className="explorer-top"><h2>目录与文件</h2><span>{page.total.toLocaleString()} 项 · 按大小降序</span></div>
+        <div className="explorer-top"><h2>目录与文件</h2><span>{(view === 'map' ? tree.data?.root.child_count ?? page.total : page.total).toLocaleString()} 项{view === 'list' && ' · 按大小降序'}</span>
+          <div className="explorer-controls">
+            {view === 'map' && <label className="map-depth">显示层级<select aria-label="显示层级" value={depth} disabled={!online} onChange={event => { setDepth(Number(event.target.value)); setSelected(null); }}>{[1, 2, 3, 4].map(value => <option key={value} value={value}>{value} 层</option>)}</select></label>}
+            <div className="explorer-views" role="group" aria-label="查看方式"><button type="button" aria-pressed={view === 'list'} onClick={() => changeView('list')}><List size={15} />列表</button><button type="button" aria-pressed={view === 'map'} onClick={() => changeView('map')}><LayoutDashboard size={15} />空间图</button></div>
+          </div>
+        </div>
           <div className="breadcrumb-bar"><Button variant="ghost" size="icon" aria-label="返回上级目录" onClick={() => directory?.parent_id != null && navigate(directory.parent_id)} disabled={!directory || directory.parent_id === null}><ArrowLeft /></Button><nav aria-label="目录层级"><span><button title={displayPath(task.root)} onClick={() => navigate(0)}>{displayPath(task.root)}</button></span>{crumbs.map(c => <span key={c.id}><ChevronRight size={13} /><button title={c.name} onClick={() => navigate(c.id)}>{c.name}</button></span>)}</nav>{loadingPage && <LoaderCircle className="spin subtle" size={14} />}</div>
           <div className="explorer-body">
-            <div className="file-panel"><div className="table-header"><span>名称</span><span>大小 <ArrowDown size={12} /></span><span>占当前目录</span></div>
+            {view === 'map' ? <div className="map-panel" aria-busy={tree.loading}>
+              {tree.error && <div className="map-error" role="alert"><span>{tree.error}</span><Button variant="outline" size="sm" disabled={!online} onClick={tree.retry}>重试</Button></div>}
+              {tree.data ? <SpaceMap root={tree.data.root} selected={selected} interactive={online} onSelect={setSelected} onNavigate={navigate} onShowList={showList} /> : <div className="list-empty">{!online ? '连接后台后可查看空间图。' : tree.error ? '空间图暂不可用，可切回列表。' : <span><LoaderCircle className="spin" size={17} /> 正在生成空间图…</span>}</div>}
+              <div className="map-caption"><span>显示 {depth} 层 · 面积代表逻辑大小{tree.data?.root.zero_count ? ` · ${tree.data.root.zero_count.toLocaleString()} 项大小为 0，未绘制` : ''}</span><span>小项合并为「其他」 · 双击目录可展开</span></div>
+            </div> : <div className="file-panel"><div className="table-header"><span>名称</span><span>大小 <ArrowDown size={12} /></span><span>占当前目录</span></div>
               <div ref={listRef} className="file-list" aria-busy={loadingPage} role="listbox" tabIndex={0} aria-label="目录内容，方向键选择，Enter 进入目录，退格返回" aria-activedescendant={selected === null ? undefined : `entry-${selected}`} onKeyDown={moveSelection}>
                 {page.entries.length ? <div style={{ height: virtual.getTotalSize(), position: 'relative' }}>{virtual.getVirtualItems().map(row => {
                   const entry = page.entries[row.index];
@@ -69,8 +85,22 @@ export function DirectoryExplorer({ api, task, online, onError }: { api: Api | n
                   <Button variant="outline" size="sm" aria-label="下一页" disabled={!online || loadingPage || offset + pageSize >= page.total} onClick={() => changePage(pageNumber + 1)}>下一页<ArrowRight /></Button>
                 </div>
               </nav>
-            </div>
-            <aside className="detail-panel"><div className="detail-heading">{selected === null ? '当前目录' : '条目详情'}<Info size={15} /></div>{shownDetail && <><h3>{shownDetail.id === 0 ? displayPath(task.root).split(/[\\/]/).filter(Boolean).at(-1) : shownDetail.name}</h3><p className="detail-kind">{{ directory: '文件夹', file: '文件', link: '链接（未跟随）', other: '特殊文件' }[shownDetail.kind]}</p><dl><dt>逻辑大小</dt><dd className="detail-size">{formatBytes(shownDetail.logical_bytes)}</dd><dt>修改时间</dt><dd>{formatDate(shownDetail.modified_at)}</dd><dt>完整路径</dt><dd className="detail-path">{displayPath(shownDetail.path)}</dd></dl><div className="detail-buttons"><Button variant="outline" size="sm" onClick={async () => { try { await navigator.clipboard.writeText(displayPath(shownDetail.path)); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { onError('复制失败，请从详情中选择路径手动复制。'); } }}>{copied ? <Check /> : <Copy />}{copied ? '已复制' : '复制路径'}</Button>{desktop.available() && <Button variant="outline" size="sm" onClick={() => desktop.reveal(displayPath(shownDetail.path)).catch(e => onError(errorText(e)))}><FolderOpen />系统定位</Button>}</div><div className="detail-footnote"><Info size={13} /><span>数据来自本次扫描。文件可能已变化；重新扫描可更新结果。</span></div></>}</aside>
+            </div>}
+            <aside className="detail-panel">
+              <div className="detail-heading">{selected === null ? '当前目录' : '条目详情'}<Info size={15} /></div>
+              {selected !== null && !shownDetail && <p className="detail-kind">正在读取详情…</p>}
+              {shownDetail && <>
+                <h3>{shownDetail.id === 0 ? displayPath(task.root).split(/[\\/]/).filter(Boolean).at(-1) : shownDetail.name}</h3>
+                <p className="detail-kind">{{ directory: '文件夹', file: '文件', link: '链接（未跟随）', other: '特殊文件' }[shownDetail.kind]}</p>
+                <dl><dt>逻辑大小</dt><dd className="detail-size">{formatBytes(shownDetail.logical_bytes)}</dd><dt>修改时间</dt><dd>{formatDate(shownDetail.modified_at)}</dd><dt>完整路径</dt><dd className="detail-path">{displayPath(shownDetail.path)}</dd></dl>
+                <div className="detail-buttons">
+                  {view === 'map' && shownDetail.kind === 'directory' && shownDetail.id !== parent && <Button variant="outline" size="sm" disabled={!online} onClick={() => navigate(shownDetail.id)}><FolderOpen />进入目录</Button>}
+                  <Button variant="outline" size="sm" onClick={async () => { try { await navigator.clipboard.writeText(displayPath(shownDetail.path)); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { onError('复制失败，请从详情中选择路径手动复制。'); } }}>{copied ? <Check /> : <Copy />}{copied ? '已复制' : '复制路径'}</Button>
+                  {desktop.available() && <Button variant="outline" size="sm" onClick={() => desktop.reveal(displayPath(shownDetail.path)).catch(e => onError(errorText(e)))}><FolderOpen />系统定位</Button>}
+                </div>
+                <div className="detail-footnote"><Info size={13} /><span>数据来自本次扫描。文件可能已变化；重新扫描可更新结果。</span></div>
+              </>}
+            </aside>
           </div>
         <footer className="explorer-footer"><span>{task.complete ? '所选范围已枚举' : '部分结果，尚未完整覆盖'} · 实际磁盘占用未知</span>{task.issue_count > 0 && <button className="issues-trigger" aria-expanded={showIssues} aria-controls="scan-issues" onClick={() => setShowIssues(v => !v)}><TriangleAlert size={13} />{task.issue_count} 项未覆盖或异常<ChevronRight size={13} /></button>}</footer>
       </section>

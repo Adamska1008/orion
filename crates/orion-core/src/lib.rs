@@ -8,11 +8,13 @@ mod model;
 mod query;
 mod scan;
 mod scanner;
+mod treemap;
 #[cfg(any(feature = "bench-internals", test))]
 pub use legacy_scan::BenchmarkRow;
 pub use model::*;
 pub use scan::Scan;
 use std::time::{SystemTime, UNIX_EPOCH};
+pub use treemap::{Treemap, TreemapNode};
 
 /// Bounds concurrent filesystem requests, including the calling scan thread.
 pub const MAX_SCAN_WORKERS: usize = 16;

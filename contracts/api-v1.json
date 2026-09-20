@@ -5,7 +5,8 @@
     "instance_id": "00000000-0000-0000-0000-000000000000",
     "version": "fixture-version",
     "capabilities": [
-      "graceful_shutdown"
+      "graceful_shutdown",
+      "treemap"
     ]
   },
   "connection": {
@@ -201,5 +202,42 @@
       "message": "fixture stale",
       "task_id": null
     }
-  ]
+  ],
+  "treemap": {
+    "revision": 7,
+    "depth": 2,
+    "root": {
+      "id": 0,
+      "parent_id": null,
+      "name": "entry-0",
+      "kind": "directory",
+      "logical_bytes": 37,
+      "allocated_bytes": null,
+      "modified_at": null,
+      "enumerated": false,
+      "child_count": 1,
+      "zero_count": 0,
+      "expanded": true,
+      "omitted_count": 0,
+      "omitted_bytes": 0,
+      "children": [
+        {
+          "id": 1,
+          "parent_id": 0,
+          "name": "entry-1",
+          "kind": "file",
+          "logical_bytes": 37,
+          "allocated_bytes": null,
+          "modified_at": 1000,
+          "enumerated": true,
+          "child_count": 0,
+          "zero_count": 0,
+          "expanded": false,
+          "omitted_count": 0,
+          "omitted_bytes": 0,
+          "children": []
+        }
+      ]
+    }
+  }
 }

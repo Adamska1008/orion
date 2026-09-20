@@ -1,5 +1,5 @@
-import { type Connection, type Task, decodeTask, decodeTasks, decodePage, decodeDetail, decodeHealth, decodeError } from './contracts';
-export type { Connection, Status, Issue, Task, Entry, Detail, Page, Health } from './contracts';
+import { type Connection, type Task, decodeTask, decodeTasks, decodePage, decodeDetail, decodeHealth, decodeError, decodeTreemap } from './contracts';
+export type { Connection, Status, Issue, Task, Entry, Detail, Page, Health, Treemap, TreemapNode } from './contracts';
 
 export class ApiError extends Error {
   constructor(public code: string, message: string, public taskId?: string) { super(message); }
@@ -47,4 +47,7 @@ export class Api {
     return this.request(`/scans/${id}/entries?parent=${parent}&offset=${offset}&limit=${limit}`, decodePage, undefined, signal);
   }
   detail(id: string, entry: number, signal?: AbortSignal) { return this.request(`/scans/${id}/entries/${entry}`, decodeDetail, undefined, signal); }
+  treemap(id: string, parent: number, depth: number, signal?: AbortSignal) {
+    return this.request(`/scans/${id}/treemap?parent=${parent}&depth=${depth}`, decodeTreemap, undefined, signal);
+  }
 }

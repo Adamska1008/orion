@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Api, validateConnection } from './api';
 import { displayPath, formatBytes } from './utils';
+import fixture from '../../../../contracts/api-v1.json';
 
 afterEach(() => vi.unstubAllGlobals());
 describe('local API client', () => {
@@ -28,6 +29,14 @@ describe('local API client', () => {
     expect(formatBytes(null)).toBe('未知'); expect(formatBytes(0)).toBe('0 B'); expect(formatBytes(1024)).toBe('1 KiB');
     expect(displayPath('\\\\?\\C:\\资料')).toBe('C:\\资料');
     expect(displayPath('\\\\?\\UNC\\server\\folder')).toBe('\\\\server\\folder');
+  });
+
+  it('requests a subtree with depth independently of list pagination', async () => {
+    const fetcher = vi.fn().mockResolvedValue({ ok: true, json: async () => fixture.treemap });
+    vi.stubGlobal('fetch', fetcher);
+    const api = new Api({ url: 'http://127.0.0.1:1234', token: 'test' });
+    await expect(api.treemap('scan', 7, 4)).resolves.toEqual(fixture.treemap);
+    expect(fetcher.mock.calls[0][0]).toBe('http://127.0.0.1:1234/api/v1/scans/scan/treemap?parent=7&depth=4');
   });
 
   it('rejects malformed success bodies and tolerates non-JSON HTTP errors', async () => {
