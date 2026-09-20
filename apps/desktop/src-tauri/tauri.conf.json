@@ -10,7 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "windows": [{ "title": "Orion · 磁盘空间", "width": 1280, "height": 840, "minWidth": 960, "minHeight": 640 }],
+    "windows": [{ "title": "Orion · 磁盘空间", "width": 1280, "height": 840, "minWidth": 960, "minHeight": 640, "zoomHotkeysEnabled": true }],
     "security": {
       "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src ipc: http://ipc.localhost http://127.0.0.1:*"
     }
