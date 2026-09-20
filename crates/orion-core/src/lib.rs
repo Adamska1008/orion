@@ -12,6 +12,15 @@ use std::{
 };
 use uuid::Uuid;
 
+mod parallel;
+
+/// Bounds concurrent filesystem requests, including the calling scan thread.
+pub const MAX_SCAN_WORKERS: usize = 16;
+
+pub fn default_scan_workers() -> usize {
+    std::thread::available_parallelism().map_or(1, |n| n.get().min(4))
+}
+
 pub fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -139,6 +148,20 @@ struct Index {
     issues: Vec<ScanIssue>,
 }
 
+impl Index {
+    fn record_issue(&mut self, issue: ScanIssue) {
+        self.issue_count += 1;
+        // Keep a deterministic bounded sample regardless of worker completion order.
+        let position = self.issues.partition_point(|existing| {
+            (&existing.path, &existing.code) <= (&issue.path, &issue.code)
+        });
+        if position < 100 {
+            self.issues.insert(position, issue);
+            self.issues.truncate(100);
+        }
+    }
+}
+
 pub struct Scan {
     pub id: Uuid,
     root: PathBuf,
@@ -147,7 +170,7 @@ pub struct Scan {
     index: RwLock<Index>,
 }
 
-#[cfg(feature = "bench-internals")]
+#[cfg(any(feature = "bench-internals", test))]
 #[doc(hidden)]
 pub type BenchmarkRow = (PathBuf, Kind, u64, Option<u64>, bool);
 
@@ -238,15 +261,11 @@ impl Scan {
 
     fn issue(&self, path: &Path, code: &str, message: String) {
         let mut index = self.index.write().unwrap();
-        index.issue_count += 1;
-        // Keep the API response and memory bounded even for inaccessible trees.
-        if index.issues.len() < 100 {
-            index.issues.push(ScanIssue {
-                path: path.to_string_lossy().into(),
-                code: code.into(),
-                message,
-            });
-        }
+        index.record_issue(ScanIssue {
+            path: path.to_string_lossy().into(),
+            code: code.into(),
+            message,
+        });
         index.revision += 1;
     }
 
@@ -269,8 +288,12 @@ impl Scan {
 
     /// Called on a dedicated worker; filesystem I/O never holds the index lock.
     pub fn run(&self) {
-        // Enumerated metadata can retain stale sizes for other names of a hard link.
-        self.run_with_metadata(|_, path| fs::symlink_metadata(path));
+        self.run_with_workers(default_scan_workers());
+    }
+
+    /// Run bounded directory workers; values outside 1..=MAX_SCAN_WORKERS are clamped.
+    pub fn run_with_workers(&self, workers: usize) {
+        self.run_parallel(workers.clamp(1, MAX_SCAN_WORKERS));
     }
 
     /// Historical path-query implementation, compiled only for controlled A/B benchmarks.
@@ -280,13 +303,14 @@ impl Scan {
         self.run_with_metadata(|_, path| fs::symlink_metadata(path));
     }
 
-    /// Experimental enumeration cache; may return stale NTFS hard-link information.
+    /// Frozen serial enumerator used before introducing directory workers and batching.
     #[cfg(feature = "bench-internals")]
     #[doc(hidden)]
     pub fn run_enumeration_metadata(&self) {
         self.run_with_metadata(|entry, _| entry.metadata());
     }
 
+    #[cfg(any(feature = "bench-internals", test))]
     fn run_with_metadata(
         &self,
         metadata_for: impl Fn(&fs::DirEntry, &Path) -> std::io::Result<fs::Metadata>,
@@ -405,7 +429,7 @@ impl Scan {
     }
 
     /// Canonical, order-independent rows for benchmark correctness checks (outside timing).
-    #[cfg(feature = "bench-internals")]
+    #[cfg(any(feature = "bench-internals", test))]
     #[doc(hidden)]
     pub fn benchmark_rows(&self) -> Vec<BenchmarkRow> {
         let index = self.index.read().unwrap();
@@ -562,7 +586,7 @@ mod tests {
     }
 
     #[test]
-    fn production_reads_updated_hard_link_size() {
+    fn path_queries_read_updated_hard_link_size() {
         let temp = tempfile::tempdir().unwrap();
         let dir = temp.path().join("中文目录");
         fs::create_dir(&dir).unwrap();
@@ -571,12 +595,13 @@ mod tests {
         fs::hard_link(dir.join("data.bin"), temp.path().join("hard-link.bin")).unwrap();
         // A linked name may still carry stale directory-entry information after this resize.
         fs::write(dir.join("data.bin"), [9; 8192]).unwrap();
-        let current = Scan::new(temp.path()).unwrap();
-        current.run();
-        assert_eq!(current.summary().logical_bytes, 16384);
-        assert_eq!(current.summary().files, 3);
-        assert!(current.summary().complete);
-        let alias = current
+        // Preserve the strict path-query regression as the benchmark control.
+        let legacy = Scan::new(temp.path()).unwrap();
+        legacy.run_with_metadata(|_, path| fs::symlink_metadata(path));
+        assert_eq!(legacy.summary().logical_bytes, 16384);
+        assert_eq!(legacy.summary().files, 3);
+        assert!(legacy.summary().complete);
+        let alias = legacy
             .list(0, 0, 10, None)
             .unwrap()
             .entries
@@ -584,6 +609,23 @@ mod tests {
             .find(|entry| entry.name == "hard-link.bin")
             .unwrap();
         assert_eq!(alias.logical_bytes, 8192);
+    }
+
+    #[test]
+    fn hard_links_are_counted_per_directory_entry() {
+        let temp = tempfile::tempdir().unwrap();
+        let dir = temp.path().join("中文目录");
+        fs::create_dir(&dir).unwrap();
+        fs::write(dir.join("data.bin"), [7; 8192]).unwrap();
+        fs::hard_link(dir.join("data.bin"), temp.path().join("hard-link.bin")).unwrap();
+        let scan = Scan::new(temp.path()).unwrap();
+        scan.run();
+        assert_eq!(scan.summary().logical_bytes, 16384);
+        assert_eq!((scan.summary().files, scan.summary().directories), (2, 2));
+        assert!(scan.summary().complete);
+        let entries = scan.list(0, 0, 10, None).unwrap().entries;
+        assert_eq!(entries.len(), 2);
+        assert!(entries.iter().all(|entry| entry.logical_bytes == 8192));
     }
 
     #[cfg(windows)]
@@ -614,10 +656,10 @@ mod tests {
         assert_eq!(scan.summary().issues[0].code, "link_skipped");
         #[cfg(feature = "bench-internals")]
         {
-            let candidate = Scan::new(&root).unwrap();
-            candidate.run_enumeration_metadata();
-            assert_eq!(scan.benchmark_rows(), candidate.benchmark_rows());
-            assert_eq!(scan.summary().issue_count, candidate.summary().issue_count);
+            let legacy = Scan::new(&root).unwrap();
+            legacy.run_legacy_metadata();
+            assert_eq!(scan.benchmark_rows(), legacy.benchmark_rows());
+            assert_eq!(scan.summary().issue_count, legacy.summary().issue_count);
         }
         // Remove only the test junction using a native directory operation.
         fs::remove_dir(link).unwrap();

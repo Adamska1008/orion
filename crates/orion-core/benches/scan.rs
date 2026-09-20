@@ -1,5 +1,5 @@
 //! End-to-end scanner benchmark. Invoke with `cargo bench`, no server or launcher.
-use orion_core::{Kind, Scan, Status, Summary};
+use orion_core::{default_scan_workers, Kind, Scan, Status, Summary, MAX_SCAN_WORKERS};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::{
@@ -15,6 +15,7 @@ use std::{
 #[serde(rename_all = "snake_case")]
 enum Variant {
     Legacy,
+    Serial,
     Current,
     Enumerated,
 }
@@ -28,6 +29,8 @@ struct Options {
     output: Option<PathBuf>,
     label: String,
     candidate: Variant,
+    baseline: Variant,
+    workers: usize,
 }
 
 impl Options {
@@ -40,6 +43,8 @@ impl Options {
             output: None,
             label: "unlabelled".into(),
             candidate: Variant::Current,
+            baseline: Variant::Serial,
+            workers: default_scan_workers(),
         };
         let mut args = std::env::args().skip(1);
         while let Some(arg) = args.next() {
@@ -47,7 +52,7 @@ impl Options {
                 continue;
             } // Cargo's harness argument.
             if arg == "--help" || arg == "-h" {
-                println!("scan benchmark: --suite all|wide|tree|deep|hardlink (default all) OR --root <absolute directory>\n  --candidate current|enumerated (default current)\n  --runs <even number >=4, default 8> --warmups <>=1, default 2>\n  --label <experiment name> --output <JSON file>\nEach run pair alternates AB / BA. This measures warm scans, not cold-cache I/O.");
+                println!("scan benchmark: --suite all|wide|tree|deep|hardlink (default all) OR --root <absolute directory>\n  --baseline serial|legacy (default serial) --candidate current|enumerated (default current)\n  --workers <1..=16; current only; default min(CPUs,4)>\n  --runs <even number >=4, default 8> --warmups <>=1, default 2>\n  --label <experiment name> --output <JSON file>\nEach run pair alternates AB / BA. This measures warm scans, not cold-cache I/O.");
                 return Ok(None);
             }
             let value = args
@@ -60,6 +65,14 @@ impl Options {
                 "--root" => options.root = Some(value.into()),
                 "--output" => options.output = Some(value.into()),
                 "--label" => options.label = value,
+                "--workers" => options.workers = value.parse().map_err(|_| "Invalid workers")?,
+                "--baseline" => {
+                    options.baseline = match value.as_str() {
+                        "serial" => Variant::Serial,
+                        "legacy" => Variant::Legacy,
+                        _ => return Err("baseline must be serial or legacy".into()),
+                    }
+                }
                 "--candidate" => {
                     options.candidate = match value.as_str() {
                         "current" => Variant::Current,
@@ -75,6 +88,9 @@ impl Options {
         }
         if options.warmups == 0 {
             return Err("At least one warmup per variant is required".into());
+        }
+        if !(1..=MAX_SCAN_WORKERS).contains(&options.workers) {
+            return Err("workers must be in 1..=16".into());
         }
         if !["all", "wide", "tree", "deep", "hardlink"].contains(&options.suite.as_str()) {
             return Err("Unknown suite".into());
@@ -230,6 +246,8 @@ impl Dataset {
 struct Identity {
     counts: Counts,
     entry_digest: String,
+    // Diagnostic only: full equality above still includes every modification timestamp.
+    structure_digest: String,
     issue_digest: String,
 }
 
@@ -259,20 +277,22 @@ fn sample(
     pair: usize,
     position: usize,
     phase: Phase,
+    workers: usize,
 ) -> Result<Sample, Box<dyn std::error::Error>> {
     // Include root validation, traversal and aggregation; exclude validation, output and drop.
     let begin = Instant::now();
     let scan = Scan::new(&dataset.root).map_err(io::Error::other)?;
     match variant {
         Variant::Legacy => scan.run_legacy_metadata(),
-        Variant::Current => scan.run(),
-        Variant::Enumerated => scan.run_enumeration_metadata(),
+        Variant::Current => scan.run_with_workers(workers),
+        Variant::Serial | Variant::Enumerated => scan.run_enumeration_metadata(),
     }
     let summary = std::hint::black_box(scan.summary());
     let elapsed = begin.elapsed();
     let counts = Counts::from(&summary);
     let rows = scan.benchmark_rows();
     let mut digest = Sha256::new();
+    let mut structure = Sha256::new();
     for (path, kind, bytes, modified, enumerated) in rows {
         // Hash lossless native path units, not to_string_lossy(). Include a length boundary.
         #[cfg(windows)]
@@ -291,17 +311,23 @@ fn sample(
         #[cfg(not(any(windows, unix)))]
         let path_bytes = path.to_string_lossy().as_bytes().to_vec();
         digest.update((path_bytes.len() as u64).to_le_bytes());
-        digest.update(path_bytes);
-        digest.update([match kind {
+        structure.update((path_bytes.len() as u64).to_le_bytes());
+        digest.update(&path_bytes);
+        structure.update(&path_bytes);
+        let kind_byte = match kind {
             Kind::Directory => 0,
             Kind::File => 1,
             Kind::Link => 2,
             Kind::Other => 3,
-        }]);
+        };
+        digest.update([kind_byte]);
+        structure.update([kind_byte]);
         digest.update(bytes.to_le_bytes());
+        structure.update(bytes.to_le_bytes());
         digest.update([u8::from(modified.is_some())]);
         digest.update(modified.unwrap_or_default().to_le_bytes());
         digest.update([u8::from(enumerated)]);
+        structure.update([u8::from(enumerated)]);
     }
     // Error messages can be localized; compare normalized paths + codes and the total count.
     let mut issues: Vec<_> = summary
@@ -322,6 +348,7 @@ fn sample(
     let identity = Identity {
         counts,
         entry_digest: format!("{:x}", digest.finalize()),
+        structure_digest: format!("{:x}", structure.finalize()),
         issue_digest: format!("{:x}", Sha256::digest(serde_json::to_vec(&issues)?)),
     };
     Ok(Sample {
@@ -367,7 +394,7 @@ fn distribution(values: &[f64]) -> Distribution {
 
 #[derive(Serialize)]
 struct Comparison {
-    legacy: Distribution,
+    baseline: Distribution,
     candidate: Distribution,
     median_paired_speedup: f64,
     median_paired_reduction_percent: f64,
@@ -392,8 +419,18 @@ fn run_dataset(
     let mut samples = vec![];
     // A baseline path query can refresh cached metadata. Check the candidate first,
     // before any warmup; keep failures in the report even if later scans agree.
-    for (position, variant) in [options.candidate, Variant::Legacy].into_iter().enumerate() {
-        let result = sample(&dataset, variant, 0, position, Phase::Preflight)?;
+    for (position, variant) in [options.candidate, options.baseline]
+        .into_iter()
+        .enumerate()
+    {
+        let result = sample(
+            &dataset,
+            variant,
+            0,
+            position,
+            Phase::Preflight,
+            options.workers,
+        )?;
         println!(
             "  preflight {:?}: {} files / {} dirs / {} bytes / {} issues",
             variant,
@@ -408,9 +445,9 @@ fn run_dataset(
         let warmup = pair < options.warmups;
         let round = if warmup { pair } else { pair - options.warmups };
         let order = if round % 2 == 0 {
-            [Variant::Legacy, options.candidate]
+            [options.baseline, options.candidate]
         } else {
-            [options.candidate, Variant::Legacy]
+            [options.candidate, options.baseline]
         };
         for (position, variant) in order.into_iter().enumerate() {
             let phase = if warmup {
@@ -418,7 +455,7 @@ fn run_dataset(
             } else {
                 Phase::Measured
             };
-            let result = sample(&dataset, variant, round, position, phase)?;
+            let result = sample(&dataset, variant, round, position, phase, options.workers)?;
             println!(
                 "  {} {:02} {:?}: {:8.2} ms | {} files / {} dirs / {} issues",
                 if warmup { "warmup" } else { "sample" },
@@ -443,9 +480,9 @@ fn run_dataset(
                 .is_none_or(|expected| &s.identity.counts == expected)
     });
     let comparison = if valid {
-        let legacy: Vec<_> = samples
+        let baseline: Vec<_> = samples
             .iter()
-            .filter(|s| s.phase == Phase::Measured && s.variant == Variant::Legacy)
+            .filter(|s| s.phase == Phase::Measured && s.variant == options.baseline)
             .map(|s| s.elapsed_ms)
             .collect();
         let candidate: Vec<_> = samples
@@ -454,27 +491,27 @@ fn run_dataset(
             .map(|s| s.elapsed_ms)
             .collect();
         let speedup = median(
-            &legacy
+            &baseline
                 .iter()
                 .zip(&candidate)
                 .map(|(a, b)| a / b)
                 .collect::<Vec<_>>(),
         );
         let reduction = median(
-            &legacy
+            &baseline
                 .iter()
                 .zip(&candidate)
                 .map(|(a, b)| (1.0 - b / a) * 100.0)
                 .collect::<Vec<_>>(),
         );
-        let a = distribution(&legacy);
+        let a = distribution(&baseline);
         let b = distribution(&candidate);
         println!(
-            "  median: legacy {:.2} ms -> candidate {:.2} ms | paired {:.2}x / {:.1}% less time",
+            "  median: baseline {:.2} ms -> candidate {:.2} ms | paired {:.2}x / {:.1}% less time",
             a.median_ms, b.median_ms, speedup, reduction
         );
         Some(Comparison {
-            legacy: a,
+            baseline: a,
             candidate: b,
             median_paired_speedup: speedup,
             median_paired_reduction_percent: reduction,
@@ -507,7 +544,10 @@ struct Report {
     warmups_per_variant: usize,
     core_source_sha256: String,
     benchmark_source_sha256: String,
+    parallel_source_sha256: String,
     candidate: Variant,
+    baseline: Variant,
+    workers: usize,
     valid: bool,
     datasets: Vec<DatasetReport>,
 }
@@ -546,7 +586,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         String::from_utf8_lossy(&git.stdout).trim().into(),
     );
     let mut report = Report {
-        schema_version: 2,
+        schema_version: 3,
         label: options.label.clone(),
         timestamp_ms: orion_core::now_ms(),
         environment,
@@ -554,6 +594,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         runs_per_variant: options.runs,
         warmups_per_variant: options.warmups,
         candidate: options.candidate,
+        baseline: options.baseline,
+        workers: options.workers,
+        parallel_source_sha256: format!("{:x}", Sha256::digest(include_bytes!("../src/parallel.rs"))),
         benchmark_source_sha256: format!("{:x}", Sha256::digest(include_bytes!("scan.rs"))),
         core_source_sha256: format!("{:x}", Sha256::digest(include_bytes!("../src/lib.rs"))),
         valid: true,

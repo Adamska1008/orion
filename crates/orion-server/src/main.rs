@@ -42,12 +42,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let port = std::env::var("ORION_PORT")
         .unwrap_or_else(|_| "43120".into())
         .parse::<u16>()?;
+    let scan_workers = match std::env::var("ORION_SCAN_WORKERS") {
+        Ok(value) => value.parse::<usize>()?,
+        Err(std::env::VarError::NotPresent) => orion_core::default_scan_workers(),
+        Err(error) => return Err(error.into()),
+    };
+    if !(1..=orion_core::MAX_SCAN_WORKERS).contains(&scan_workers) {
+        return Err("ORION_SCAN_WORKERS must be between 1 and 16".into());
+    }
     let token = format!(
         "{}{}",
         uuid::Uuid::new_v4().simple(),
         uuid::Uuid::new_v4().simple()
     );
-    let state = orion_server::AppState::new(token.clone());
+    let state = orion_server::AppState::new(token.clone()).with_scan_workers(scan_workers);
     let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, port)).await?;
     let url = format!("http://{}", listener.local_addr()?);
     // Each instance gets its own credential file; concurrent servers cannot overwrite it.
@@ -63,6 +71,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )?,
     )?;
     println!("Orion Server listening at {url}");
+    println!("Scan workers: {scan_workers}");
     println!(
         "Connection file: {}",
         fs::canonicalize(&connection)?.display()

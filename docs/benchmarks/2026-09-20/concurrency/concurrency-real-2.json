@@ -1,0 +1,492 @@
+{
+  "schema_version": 3,
+  "label": "concurrency-real-2",
+  "timestamp_ms": 1789917932013,
+  "environment": {
+    "arch": "x86_64",
+    "cpu": "AMD64 Family 25 Model 97 Stepping 2, AuthenticAMD",
+    "filesystem_cache": "warm; not evicted; fixture creation is excluded",
+    "git_head": "bedfa5012b55ba4222ef4bf1f2ac47e17cda0f19",
+    "logical_cpus": "16",
+    "os": "windows",
+    "profile": "bench (optimized)",
+    "rustc": "rustc 1.92.0 (ded5c06cf 2025-12-08)"
+  },
+  "method": "Candidate-first correctness preflight, then same-process AB/BA pairs after warmup; new Scan each sample. Timer includes new/run/summary; excludes fixture setup, checksum, serialization and drop. Equality includes preflight and uses SHA-256 of sorted paths/types/sizes/mtime/enumeration plus counts/errors. No HTTP or GUI polling. Not cold-cache or whole-volume performance.",
+  "runs_per_variant": 8,
+  "warmups_per_variant": 2,
+  "core_source_sha256": "c25ecbaac16724ba391a81de8d5693129bf740a54ce26a1d4a227c3611cacf0f",
+  "benchmark_source_sha256": "48565b232cc3d78478eeb58cbfb8864aa9bccfa5c6c297030190b7e1e2aa3395",
+  "parallel_source_sha256": "27309dc005922b3130c25480cfe11c35e3b66f6313bfd3fd1b0da5596bc9d887",
+  "candidate": "current",
+  "baseline": "serial",
+  "workers": 2,
+  "valid": true,
+  "datasets": [
+    {
+      "name": "real-directory",
+      "root": "C:\\Users\\dell\\codes\\orion\\node_modules",
+      "expected": null,
+      "valid": true,
+      "invalid_reason": null,
+      "samples": [
+        {
+          "variant": "current",
+          "pair": 0,
+          "position": 0,
+          "phase": "preflight",
+          "elapsed_ms": 41.766,
+          "entries_per_second": 173681.9422496768,
+          "status": "completed",
+          "identity": {
+            "counts": {
+              "files": 6885,
+              "directories": 369,
+              "logical_bytes": 137089014,
+              "issue_count": 1,
+              "complete": false
+            },
+            "entry_digest": "a447f0c5f4e21ad33748e4583787a6bcd6b64c8ba7faac40184118eba5362469",
+            "issue_digest": "229cc3f60dd6bf30690c6e0b159f96fe6b9e9a527983680273af9fe61c473fbc"
+          }
+        },
+        {
+          "variant": "serial",
+          "pair": 0,
+          "position": 1,
+          "phase": "preflight",
+          "elapsed_ms": 89.5786,
+          "entries_per_second": 80979.16243388488,
+          "status": "completed",
+          "identity": {
+            "counts": {
+              "files": 6885,
+              "directories": 369,
+              "logical_bytes": 137089014,
+              "issue_count": 1,
+              "complete": false
+            },
+            "entry_digest": "a447f0c5f4e21ad33748e4583787a6bcd6b64c8ba7faac40184118eba5362469",
+            "issue_digest": "229cc3f60dd6bf30690c6e0b159f96fe6b9e9a527983680273af9fe61c473fbc"
+          }
+        },
+        {
+          "variant": "serial",
+          "pair": 0,
+          "position": 0,
+          "phase": "warmup",
+          "elapsed_ms": 72.6204,
+          "entries_per_second": 99889.28730769866,
+          "status": "completed",
+          "identity": {
+            "counts": {
+              "files": 6885,
+              "directories": 369,
+              "logical_bytes": 137089014,
+              "issue_count": 1,
+              "complete": false
+            },
+            "entry_digest": "a447f0c5f4e21ad33748e4583787a6bcd6b64c8ba7faac40184118eba5362469",
+            "issue_digest": "229cc3f60dd6bf30690c6e0b159f96fe6b9e9a527983680273af9fe61c473fbc"
+          }
+        },
+        {
+          "variant": "current",
+          "pair": 0,
+          "position": 1,
+          "phase": "warmup",
+          "elapsed_ms": 34.9878,
+          "entries_per_second": 207329.4119664569,
+          "status": "completed",
+          "identity": {
+            "counts": {
+              "files": 6885,
+              "directories": 369,
+              "logical_bytes": 137089014,
+              "issue_count": 1,
+              "complete": false
+            },
+            "entry_digest": "a447f0c5f4e21ad33748e4583787a6bcd6b64c8ba7faac40184118eba5362469",
+            "issue_digest": "229cc3f60dd6bf30690c6e0b159f96fe6b9e9a527983680273af9fe61c473fbc"
+          }
+        },
+        {
+          "variant": "current",
+          "pair": 1,
+          "position": 0,
+          "phase": "warmup",
+          "elapsed_ms": 33.3765,
+          "entries_per_second": 217338.54658217606,
+          "status": "completed",
+          "identity": {
+            "counts": {
+              "files": 6885,
+              "directories": 369,
+              "logical_bytes": 137089014,
+              "issue_count": 1,
+              "complete": false
+            },
+            "entry_digest": "a447f0c5f4e21ad33748e4583787a6bcd6b64c8ba7faac40184118eba5362469",
+            "issue_digest": "229cc3f60dd6bf30690c6e0b159f96fe6b9e9a527983680273af9fe61c473fbc"
+          }
+        },
+        {
+          "variant": "serial",
+          "pair": 1,
+          "position": 1,
+          "phase": "warmup",
+          "elapsed_ms": 75.9827,
+          "entries_per_second": 95469.10020307254,
+          "status": "completed",
+          "identity": {
+            "counts": {
+              "files": 6885,
+              "directories": 369,
+              "logical_bytes": 137089014,
+              "issue_count": 1,
+              "complete": false
+            },
+            "entry_digest": "a447f0c5f4e21ad33748e4583787a6bcd6b64c8ba7faac40184118eba5362469",
+            "issue_digest": "229cc3f60dd6bf30690c6e0b159f96fe6b9e9a527983680273af9fe61c473fbc"
+          }
+        },
+        {
+          "variant": "serial",
+          "pair": 0,
+          "position": 0,
+          "phase": "measured",
+          "elapsed_ms": 72.4731,
+          "entries_per_second": 100092.31011230373,
+          "status": "completed",
+          "identity": {
+            "counts": {
+              "files": 6885,
+              "directories": 369,
+              "logical_bytes": 137089014,
+              "issue_count": 1,
+              "complete": false
+            },
+            "entry_digest": "a447f0c5f4e21ad33748e4583787a6bcd6b64c8ba7faac40184118eba5362469",
+            "issue_digest": "229cc3f60dd6bf30690c6e0b159f96fe6b9e9a527983680273af9fe61c473fbc"
+          }
+        },
+        {
+          "variant": "current",
+          "pair": 0,
+          "position": 1,
+          "phase": "measured",
+          "elapsed_ms": 38.818,
+          "entries_per_second": 186872.0696584059,
+          "status": "completed",
+          "identity": {
+            "counts": {
+              "files": 6885,
+              "directories": 369,
+              "logical_bytes": 137089014,
+              "issue_count": 1,
+              "complete": false
+            },
+            "entry_digest": "a447f0c5f4e21ad33748e4583787a6bcd6b64c8ba7faac40184118eba5362469",
+            "issue_digest": "229cc3f60dd6bf30690c6e0b159f96fe6b9e9a527983680273af9fe61c473fbc"
+          }
+        },
+        {
+          "variant": "current",
+          "pair": 1,
+          "position": 0,
+          "phase": "measured",
+          "elapsed_ms": 37.0589,
+          "entries_per_second": 195742.45322985842,
+          "status": "completed",
+          "identity": {
+            "counts": {
+              "files": 6885,
+              "directories": 369,
+              "logical_bytes": 137089014,
+              "issue_count": 1,
+              "complete": false
+            },
+            "entry_digest": "a447f0c5f4e21ad33748e4583787a6bcd6b64c8ba7faac40184118eba5362469",
+            "issue_digest": "229cc3f60dd6bf30690c6e0b159f96fe6b9e9a527983680273af9fe61c473fbc"
+          }
+        },
+        {
+          "variant": "serial",
+          "pair": 1,
+          "position": 1,
+          "phase": "measured",
+          "elapsed_ms": 72.2804,
+          "entries_per_second": 100359.15683919846,
+          "status": "completed",
+          "identity": {
+            "counts": {
+              "files": 6885,
+              "directories": 369,
+              "logical_bytes": 137089014,
+              "issue_count": 1,
+              "complete": false
+            },
+            "entry_digest": "a447f0c5f4e21ad33748e4583787a6bcd6b64c8ba7faac40184118eba5362469",
+            "issue_digest": "229cc3f60dd6bf30690c6e0b159f96fe6b9e9a527983680273af9fe61c473fbc"
+          }
+        },
+        {
+          "variant": "serial",
+          "pair": 2,
+          "position": 0,
+          "phase": "measured",
+          "elapsed_ms": 65.3333,
+          "entries_per_second": 111030.66889319842,
+          "status": "completed",
+          "identity": {
+            "counts": {
+              "files": 6885,
+              "directories": 369,
+              "logical_bytes": 137089014,
+              "issue_count": 1,
+              "complete": false
+            },
+            "entry_digest": "a447f0c5f4e21ad33748e4583787a6bcd6b64c8ba7faac40184118eba5362469",
+            "issue_digest": "229cc3f60dd6bf30690c6e0b159f96fe6b9e9a527983680273af9fe61c473fbc"
+          }
+        },
+        {
+          "variant": "current",
+          "pair": 2,
+          "position": 1,
+          "phase": "measured",
+          "elapsed_ms": 33.4058,
+          "entries_per_second": 217147.92042100473,
+          "status": "completed",
+          "identity": {
+            "counts": {
+              "files": 6885,
+              "directories": 369,
+              "logical_bytes": 137089014,
+              "issue_count": 1,
+              "complete": false
+            },
+            "entry_digest": "a447f0c5f4e21ad33748e4583787a6bcd6b64c8ba7faac40184118eba5362469",
+            "issue_digest": "229cc3f60dd6bf30690c6e0b159f96fe6b9e9a527983680273af9fe61c473fbc"
+          }
+        },
+        {
+          "variant": "current",
+          "pair": 3,
+          "position": 0,
+          "phase": "measured",
+          "elapsed_ms": 35.083200000000005,
+          "entries_per_second": 206765.63141332602,
+          "status": "completed",
+          "identity": {
+            "counts": {
+              "files": 6885,
+              "directories": 369,
+              "logical_bytes": 137089014,
+              "issue_count": 1,
+              "complete": false
+            },
+            "entry_digest": "a447f0c5f4e21ad33748e4583787a6bcd6b64c8ba7faac40184118eba5362469",
+            "issue_digest": "229cc3f60dd6bf30690c6e0b159f96fe6b9e9a527983680273af9fe61c473fbc"
+          }
+        },
+        {
+          "variant": "serial",
+          "pair": 3,
+          "position": 1,
+          "phase": "measured",
+          "elapsed_ms": 70.5731,
+          "entries_per_second": 102787.03925433345,
+          "status": "completed",
+          "identity": {
+            "counts": {
+              "files": 6885,
+              "directories": 369,
+              "logical_bytes": 137089014,
+              "issue_count": 1,
+              "complete": false
+            },
+            "entry_digest": "a447f0c5f4e21ad33748e4583787a6bcd6b64c8ba7faac40184118eba5362469",
+            "issue_digest": "229cc3f60dd6bf30690c6e0b159f96fe6b9e9a527983680273af9fe61c473fbc"
+          }
+        },
+        {
+          "variant": "serial",
+          "pair": 4,
+          "position": 0,
+          "phase": "measured",
+          "elapsed_ms": 67.7287,
+          "entries_per_second": 107103.78318201884,
+          "status": "completed",
+          "identity": {
+            "counts": {
+              "files": 6885,
+              "directories": 369,
+              "logical_bytes": 137089014,
+              "issue_count": 1,
+              "complete": false
+            },
+            "entry_digest": "a447f0c5f4e21ad33748e4583787a6bcd6b64c8ba7faac40184118eba5362469",
+            "issue_digest": "229cc3f60dd6bf30690c6e0b159f96fe6b9e9a527983680273af9fe61c473fbc"
+          }
+        },
+        {
+          "variant": "current",
+          "pair": 4,
+          "position": 1,
+          "phase": "measured",
+          "elapsed_ms": 33.6551,
+          "entries_per_second": 215539.3981892789,
+          "status": "completed",
+          "identity": {
+            "counts": {
+              "files": 6885,
+              "directories": 369,
+              "logical_bytes": 137089014,
+              "issue_count": 1,
+              "complete": false
+            },
+            "entry_digest": "a447f0c5f4e21ad33748e4583787a6bcd6b64c8ba7faac40184118eba5362469",
+            "issue_digest": "229cc3f60dd6bf30690c6e0b159f96fe6b9e9a527983680273af9fe61c473fbc"
+          }
+        },
+        {
+          "variant": "current",
+          "pair": 5,
+          "position": 0,
+          "phase": "measured",
+          "elapsed_ms": 29.8383,
+          "entries_per_second": 243110.36486663113,
+          "status": "completed",
+          "identity": {
+            "counts": {
+              "files": 6885,
+              "directories": 369,
+              "logical_bytes": 137089014,
+              "issue_count": 1,
+              "complete": false
+            },
+            "entry_digest": "a447f0c5f4e21ad33748e4583787a6bcd6b64c8ba7faac40184118eba5362469",
+            "issue_digest": "229cc3f60dd6bf30690c6e0b159f96fe6b9e9a527983680273af9fe61c473fbc"
+          }
+        },
+        {
+          "variant": "serial",
+          "pair": 5,
+          "position": 1,
+          "phase": "measured",
+          "elapsed_ms": 56.9434,
+          "entries_per_second": 127389.65358584138,
+          "status": "completed",
+          "identity": {
+            "counts": {
+              "files": 6885,
+              "directories": 369,
+              "logical_bytes": 137089014,
+              "issue_count": 1,
+              "complete": false
+            },
+            "entry_digest": "a447f0c5f4e21ad33748e4583787a6bcd6b64c8ba7faac40184118eba5362469",
+            "issue_digest": "229cc3f60dd6bf30690c6e0b159f96fe6b9e9a527983680273af9fe61c473fbc"
+          }
+        },
+        {
+          "variant": "serial",
+          "pair": 6,
+          "position": 0,
+          "phase": "measured",
+          "elapsed_ms": 50.0751,
+          "entries_per_second": 144862.41665019142,
+          "status": "completed",
+          "identity": {
+            "counts": {
+              "files": 6885,
+              "directories": 369,
+              "logical_bytes": 137089014,
+              "issue_count": 1,
+              "complete": false
+            },
+            "entry_digest": "a447f0c5f4e21ad33748e4583787a6bcd6b64c8ba7faac40184118eba5362469",
+            "issue_digest": "229cc3f60dd6bf30690c6e0b159f96fe6b9e9a527983680273af9fe61c473fbc"
+          }
+        },
+        {
+          "variant": "current",
+          "pair": 6,
+          "position": 1,
+          "phase": "measured",
+          "elapsed_ms": 34.9092,
+          "entries_per_second": 207796.22563679487,
+          "status": "completed",
+          "identity": {
+            "counts": {
+              "files": 6885,
+              "directories": 369,
+              "logical_bytes": 137089014,
+              "issue_count": 1,
+              "complete": false
+            },
+            "entry_digest": "a447f0c5f4e21ad33748e4583787a6bcd6b64c8ba7faac40184118eba5362469",
+            "issue_digest": "229cc3f60dd6bf30690c6e0b159f96fe6b9e9a527983680273af9fe61c473fbc"
+          }
+        },
+        {
+          "variant": "current",
+          "pair": 7,
+          "position": 0,
+          "phase": "measured",
+          "elapsed_ms": 36.2316,
+          "entries_per_second": 200211.96966184213,
+          "status": "completed",
+          "identity": {
+            "counts": {
+              "files": 6885,
+              "directories": 369,
+              "logical_bytes": 137089014,
+              "issue_count": 1,
+              "complete": false
+            },
+            "entry_digest": "a447f0c5f4e21ad33748e4583787a6bcd6b64c8ba7faac40184118eba5362469",
+            "issue_digest": "229cc3f60dd6bf30690c6e0b159f96fe6b9e9a527983680273af9fe61c473fbc"
+          }
+        },
+        {
+          "variant": "serial",
+          "pair": 7,
+          "position": 1,
+          "phase": "measured",
+          "elapsed_ms": 76.8428,
+          "entries_per_second": 94400.51637889301,
+          "status": "completed",
+          "identity": {
+            "counts": {
+              "files": 6885,
+              "directories": 369,
+              "logical_bytes": 137089014,
+              "issue_count": 1,
+              "complete": false
+            },
+            "entry_digest": "a447f0c5f4e21ad33748e4583787a6bcd6b64c8ba7faac40184118eba5362469",
+            "issue_digest": "229cc3f60dd6bf30690c6e0b159f96fe6b9e9a527983680273af9fe61c473fbc"
+          }
+        }
+      ],
+      "comparison": {
+        "baseline": {
+          "min_ms": 50.0751,
+          "median_ms": 69.15090000000001,
+          "max_ms": 76.8428,
+          "median_absolute_deviation_ms": 3.569900000000004
+        },
+        "candidate": {
+          "min_ms": 29.8383,
+          "median_ms": 34.9962,
+          "max_ms": 38.818,
+          "median_absolute_deviation_ms": 1.4657500000000034
+        },
+        "median_paired_speedup": 1.9530833364817402,
+        "median_paired_reduction_percent": 48.79881254273104
+      }
+    }
+  ]
+}

@@ -27,6 +27,7 @@ pub struct AppState {
     token: Arc<String>,
     pub instance_id: Uuid,
     tasks: Arc<Mutex<Tasks>>,
+    scan_workers: usize,
 }
 
 impl AppState {
@@ -35,7 +36,13 @@ impl AppState {
             token: Arc::new(token),
             instance_id: Uuid::new_v4(),
             tasks: Default::default(),
+            scan_workers: orion_core::default_scan_workers(),
         }
+    }
+
+    pub fn with_scan_workers(mut self, workers: usize) -> Self {
+        self.scan_workers = workers.clamp(1, orion_core::MAX_SCAN_WORKERS);
+        self
     }
 
     fn task(&self, id: Uuid) -> Result<Arc<Scan>, ApiError> {
@@ -100,10 +107,14 @@ impl AppState {
         let scan = Scan::new(&PathBuf::from(&request.root))
             .map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, "invalid_root", &e))?;
         let worker = scan.clone();
+        let workers = self.scan_workers;
         std::thread::Builder::new()
             .name("orion-scan".into())
             .spawn(move || {
-                if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| worker.run())).is_err()
+                if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    worker.run_with_workers(workers)
+                }))
+                .is_err()
                 {
                     worker.fail("扫描工作线程意外退出。".into());
                 }
