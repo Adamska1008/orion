@@ -147,6 +147,10 @@ pub struct Scan {
     index: RwLock<Index>,
 }
 
+#[cfg(feature = "bench-internals")]
+#[doc(hidden)]
+pub type BenchmarkRow = (PathBuf, Kind, u64, Option<u64>, bool);
+
 fn modified(metadata: &fs::Metadata) -> Option<u64> {
     metadata
         .modified()
@@ -265,6 +269,28 @@ impl Scan {
 
     /// Called on a dedicated worker; filesystem I/O never holds the index lock.
     pub fn run(&self) {
+        // Enumerated metadata can retain stale sizes for other names of a hard link.
+        self.run_with_metadata(|_, path| fs::symlink_metadata(path));
+    }
+
+    /// Historical path-query implementation, compiled only for controlled A/B benchmarks.
+    #[cfg(feature = "bench-internals")]
+    #[doc(hidden)]
+    pub fn run_legacy_metadata(&self) {
+        self.run_with_metadata(|_, path| fs::symlink_metadata(path));
+    }
+
+    /// Experimental enumeration cache; may return stale NTFS hard-link information.
+    #[cfg(feature = "bench-internals")]
+    #[doc(hidden)]
+    pub fn run_enumeration_metadata(&self) {
+        self.run_with_metadata(|entry, _| entry.metadata());
+    }
+
+    fn run_with_metadata(
+        &self,
+        metadata_for: impl Fn(&fs::DirEntry, &Path) -> std::io::Result<fs::Metadata>,
+    ) {
         let mut pending = vec![(self.root.clone(), 0)];
         while let Some((path, parent)) = pending.pop() {
             if self.cancel.load(Ordering::Relaxed) {
@@ -311,7 +337,7 @@ impl Scan {
                     }
                 };
                 let child_path = child.path();
-                let metadata = match fs::symlink_metadata(&child_path) {
+                let metadata = match metadata_for(&child, &child_path) {
                     Ok(metadata) => metadata,
                     Err(e) => {
                         self.issue(&child_path, "metadata", e.to_string());
@@ -376,6 +402,32 @@ impl Scan {
             index.revision += 1;
         }
         self.finish(Status::Completed);
+    }
+
+    /// Canonical, order-independent rows for benchmark correctness checks (outside timing).
+    #[cfg(feature = "bench-internals")]
+    #[doc(hidden)]
+    pub fn benchmark_rows(&self) -> Vec<BenchmarkRow> {
+        let index = self.index.read().unwrap();
+        let mut rows = Vec::with_capacity(index.entries.len());
+        for (id, entry) in index.entries.iter().enumerate() {
+            let mut parts = vec![];
+            let mut current = id;
+            while let Some(parent) = index.entries[current].parent {
+                parts.push(index.entries[current].name.as_os_str());
+                current = parent;
+            }
+            let path: PathBuf = parts.into_iter().rev().collect();
+            rows.push((
+                path,
+                entry.kind,
+                entry.bytes,
+                entry.modified,
+                entry.enumerated,
+            ));
+        }
+        rows.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+        rows
     }
 
     pub fn list(
@@ -509,6 +561,31 @@ mod tests {
         assert_eq!(scan.summary().issue_count, 1);
     }
 
+    #[test]
+    fn production_reads_updated_hard_link_size() {
+        let temp = tempfile::tempdir().unwrap();
+        let dir = temp.path().join("中文目录");
+        fs::create_dir(&dir).unwrap();
+        fs::write(dir.join("data.bin"), [7; 4096]).unwrap();
+        fs::write(dir.join("empty.bin"), []).unwrap();
+        fs::hard_link(dir.join("data.bin"), temp.path().join("hard-link.bin")).unwrap();
+        // A linked name may still carry stale directory-entry information after this resize.
+        fs::write(dir.join("data.bin"), [9; 8192]).unwrap();
+        let current = Scan::new(temp.path()).unwrap();
+        current.run();
+        assert_eq!(current.summary().logical_bytes, 16384);
+        assert_eq!(current.summary().files, 3);
+        assert!(current.summary().complete);
+        let alias = current
+            .list(0, 0, 10, None)
+            .unwrap()
+            .entries
+            .into_iter()
+            .find(|entry| entry.name == "hard-link.bin")
+            .unwrap();
+        assert_eq!(alias.logical_bytes, 8192);
+    }
+
     #[cfg(windows)]
     #[test]
     fn junction_is_not_followed() {
@@ -535,6 +612,13 @@ mod tests {
         scan.run();
         assert_eq!(scan.summary().logical_bytes, 0);
         assert_eq!(scan.summary().issues[0].code, "link_skipped");
+        #[cfg(feature = "bench-internals")]
+        {
+            let candidate = Scan::new(&root).unwrap();
+            candidate.run_enumeration_metadata();
+            assert_eq!(scan.benchmark_rows(), candidate.benchmark_rows());
+            assert_eq!(scan.summary().issue_count, candidate.summary().issue_count);
+        }
         // Remove only the test junction using a native directory operation.
         fs::remove_dir(link).unwrap();
         assert!(target.join("file").exists());

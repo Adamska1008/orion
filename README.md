@@ -73,6 +73,8 @@ cargo build --locked --release -p orion-server -p orion-desktop --features orion
 - 目录列表按大小降序，每页 200 项并虚拟化渲染。扫描时每次查询是独立版本，跨页排序可能变化；GUI 不拼接不同版本的分页结果。
 - 未实现持久化、清理、MFT / USN、完整 CLI、MCP 或 Skill。
 
+扫描性能对比使用标准 `cargo bench`，方法、固定数据集与真实目录用法见 [Benchmark](docs/BENCHMARK.md)。
+
 ## 项目结构
 
 - `crates/orion-core`：目录枚举、索引、统计、取消与部分结果。

@@ -1,0 +1,295 @@
+{
+  "schema_version": 2,
+  "label": "hardlink-baseline",
+  "timestamp_ms": 1789916363413,
+  "environment": {
+    "arch": "x86_64",
+    "cpu": "AMD64 Family 25 Model 97 Stepping 2, AuthenticAMD",
+    "filesystem_cache": "warm; not evicted; fixture creation is excluded",
+    "git_head": "57e055cdc47bbbe3fbc17d711a03498250e2c3a0",
+    "logical_cpus": "16",
+    "os": "windows",
+    "profile": "bench (optimized)",
+    "rustc": "rustc 1.92.0 (ded5c06cf 2025-12-08)"
+  },
+  "method": "Candidate-first correctness preflight, then same-process AB/BA pairs after warmup; new Scan each sample. Timer includes new/run/summary; excludes fixture setup, checksum, serialization and drop. Equality includes preflight and uses SHA-256 of sorted paths/types/sizes/mtime/enumeration plus counts/errors. No HTTP or GUI polling. Not cold-cache or whole-volume performance.",
+  "runs_per_variant": 4,
+  "warmups_per_variant": 1,
+  "core_source_sha256": "727aba8f78ad7a40c342317fa2ed8237abffeb90e7f0618e34d1c8e7eb037c90",
+  "benchmark_source_sha256": "ef54a458bb20e77d2f595d7ed99a850f372d87d300ce1736af4b118b84c63e20",
+  "candidate": "current",
+  "valid": true,
+  "datasets": [
+    {
+      "name": "hardlink-v1",
+      "root": "\\\\?\\C:\\Users\\dell\\codes\\orion\\target\\bench-fixtures\\scan-UFkYpk",
+      "expected": {
+        "files": 2,
+        "directories": 1,
+        "logical_bytes": 16384,
+        "issue_count": 0,
+        "complete": true
+      },
+      "valid": true,
+      "invalid_reason": null,
+      "samples": [
+        {
+          "variant": "current",
+          "pair": 0,
+          "position": 0,
+          "phase": "preflight",
+          "elapsed_ms": 0.4814,
+          "entries_per_second": 6231.823847112589,
+          "status": "completed",
+          "identity": {
+            "counts": {
+              "files": 2,
+              "directories": 1,
+              "logical_bytes": 16384,
+              "issue_count": 0,
+              "complete": true
+            },
+            "entry_digest": "61ed74417f6eee132e2367002475c4d1e07101053c8345fc5295360c18c83d4c",
+            "issue_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          }
+        },
+        {
+          "variant": "legacy",
+          "pair": 0,
+          "position": 1,
+          "phase": "preflight",
+          "elapsed_ms": 0.33490000000000003,
+          "entries_per_second": 8957.897879964168,
+          "status": "completed",
+          "identity": {
+            "counts": {
+              "files": 2,
+              "directories": 1,
+              "logical_bytes": 16384,
+              "issue_count": 0,
+              "complete": true
+            },
+            "entry_digest": "61ed74417f6eee132e2367002475c4d1e07101053c8345fc5295360c18c83d4c",
+            "issue_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          }
+        },
+        {
+          "variant": "legacy",
+          "pair": 0,
+          "position": 0,
+          "phase": "warmup",
+          "elapsed_ms": 0.367,
+          "entries_per_second": 8174.386920980927,
+          "status": "completed",
+          "identity": {
+            "counts": {
+              "files": 2,
+              "directories": 1,
+              "logical_bytes": 16384,
+              "issue_count": 0,
+              "complete": true
+            },
+            "entry_digest": "61ed74417f6eee132e2367002475c4d1e07101053c8345fc5295360c18c83d4c",
+            "issue_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          }
+        },
+        {
+          "variant": "current",
+          "pair": 0,
+          "position": 1,
+          "phase": "warmup",
+          "elapsed_ms": 0.29569999999999996,
+          "entries_per_second": 10145.417653026718,
+          "status": "completed",
+          "identity": {
+            "counts": {
+              "files": 2,
+              "directories": 1,
+              "logical_bytes": 16384,
+              "issue_count": 0,
+              "complete": true
+            },
+            "entry_digest": "61ed74417f6eee132e2367002475c4d1e07101053c8345fc5295360c18c83d4c",
+            "issue_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          }
+        },
+        {
+          "variant": "legacy",
+          "pair": 0,
+          "position": 0,
+          "phase": "measured",
+          "elapsed_ms": 0.4129,
+          "entries_per_second": 7265.681763138775,
+          "status": "completed",
+          "identity": {
+            "counts": {
+              "files": 2,
+              "directories": 1,
+              "logical_bytes": 16384,
+              "issue_count": 0,
+              "complete": true
+            },
+            "entry_digest": "61ed74417f6eee132e2367002475c4d1e07101053c8345fc5295360c18c83d4c",
+            "issue_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          }
+        },
+        {
+          "variant": "current",
+          "pair": 0,
+          "position": 1,
+          "phase": "measured",
+          "elapsed_ms": 0.4665,
+          "entries_per_second": 6430.868167202572,
+          "status": "completed",
+          "identity": {
+            "counts": {
+              "files": 2,
+              "directories": 1,
+              "logical_bytes": 16384,
+              "issue_count": 0,
+              "complete": true
+            },
+            "entry_digest": "61ed74417f6eee132e2367002475c4d1e07101053c8345fc5295360c18c83d4c",
+            "issue_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          }
+        },
+        {
+          "variant": "current",
+          "pair": 1,
+          "position": 0,
+          "phase": "measured",
+          "elapsed_ms": 0.31579999999999997,
+          "entries_per_second": 9499.683343888537,
+          "status": "completed",
+          "identity": {
+            "counts": {
+              "files": 2,
+              "directories": 1,
+              "logical_bytes": 16384,
+              "issue_count": 0,
+              "complete": true
+            },
+            "entry_digest": "61ed74417f6eee132e2367002475c4d1e07101053c8345fc5295360c18c83d4c",
+            "issue_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          }
+        },
+        {
+          "variant": "legacy",
+          "pair": 1,
+          "position": 1,
+          "phase": "measured",
+          "elapsed_ms": 0.3219,
+          "entries_per_second": 9319.664492078286,
+          "status": "completed",
+          "identity": {
+            "counts": {
+              "files": 2,
+              "directories": 1,
+              "logical_bytes": 16384,
+              "issue_count": 0,
+              "complete": true
+            },
+            "entry_digest": "61ed74417f6eee132e2367002475c4d1e07101053c8345fc5295360c18c83d4c",
+            "issue_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          }
+        },
+        {
+          "variant": "legacy",
+          "pair": 2,
+          "position": 0,
+          "phase": "measured",
+          "elapsed_ms": 0.5599999999999999,
+          "entries_per_second": 5357.142857142858,
+          "status": "completed",
+          "identity": {
+            "counts": {
+              "files": 2,
+              "directories": 1,
+              "logical_bytes": 16384,
+              "issue_count": 0,
+              "complete": true
+            },
+            "entry_digest": "61ed74417f6eee132e2367002475c4d1e07101053c8345fc5295360c18c83d4c",
+            "issue_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          }
+        },
+        {
+          "variant": "current",
+          "pair": 2,
+          "position": 1,
+          "phase": "measured",
+          "elapsed_ms": 0.6988,
+          "entries_per_second": 4293.073840870064,
+          "status": "completed",
+          "identity": {
+            "counts": {
+              "files": 2,
+              "directories": 1,
+              "logical_bytes": 16384,
+              "issue_count": 0,
+              "complete": true
+            },
+            "entry_digest": "61ed74417f6eee132e2367002475c4d1e07101053c8345fc5295360c18c83d4c",
+            "issue_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          }
+        },
+        {
+          "variant": "current",
+          "pair": 3,
+          "position": 0,
+          "phase": "measured",
+          "elapsed_ms": 0.5751000000000001,
+          "entries_per_second": 5216.484089723526,
+          "status": "completed",
+          "identity": {
+            "counts": {
+              "files": 2,
+              "directories": 1,
+              "logical_bytes": 16384,
+              "issue_count": 0,
+              "complete": true
+            },
+            "entry_digest": "61ed74417f6eee132e2367002475c4d1e07101053c8345fc5295360c18c83d4c",
+            "issue_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          }
+        },
+        {
+          "variant": "legacy",
+          "pair": 3,
+          "position": 1,
+          "phase": "measured",
+          "elapsed_ms": 0.4782,
+          "entries_per_second": 6273.525721455458,
+          "status": "completed",
+          "identity": {
+            "counts": {
+              "files": 2,
+              "directories": 1,
+              "logical_bytes": 16384,
+              "issue_count": 0,
+              "complete": true
+            },
+            "entry_digest": "61ed74417f6eee132e2367002475c4d1e07101053c8345fc5295360c18c83d4c",
+            "issue_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          }
+        }
+      ],
+      "comparison": {
+        "legacy": {
+          "min_ms": 0.3219,
+          "median_ms": 0.44555,
+          "max_ms": 0.5599999999999999,
+          "median_absolute_deviation_ms": 0.07354999999999998
+        },
+        "candidate": {
+          "min_ms": 0.31579999999999997,
+          "median_ms": 0.5208,
+          "max_ms": 0.6988,
+          "median_absolute_deviation_ms": 0.11614999999999998
+        },
+        "median_paired_speedup": 0.858304692990622,
+        "median_paired_reduction_percent": -16.622419748554552
+      }
+    }
+  ]
+}
