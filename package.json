@@ -1,0 +1,13 @@
+{
+  "name": "orion",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": ["apps/desktop"],
+  "scripts": {
+    "dev": "npm run dev --workspace @orion/desktop",
+    "desktop": "npm run tauri --workspace @orion/desktop -- dev",
+    "build": "npm run build --workspace @orion/desktop",
+    "test": "npm run test --workspace @orion/desktop",
+    "check": "npm run check --workspace @orion/desktop"
+  }
+}

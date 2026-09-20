@@ -1,0 +1,9 @@
+/target/
+/node_modules/
+/apps/desktop/node_modules/
+/apps/desktop/dist/
+/.orion/
+*.log
+*.tsbuildinfo
+/apps/desktop/src-tauri/gen/
+/releases/
