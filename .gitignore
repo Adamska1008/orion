@@ -11,3 +11,6 @@
 *.tsbuildinfo
 /apps/desktop/src-tauri/gen/
 /releases/
+# Python skill helpers
+__pycache__/
+*.py[cod]

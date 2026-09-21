@@ -1,0 +1,4 @@
+interface:
+  display_name: "Orion 空间诊断"
+  short_description: "通过 Orion 定位磁盘占用，核对大文件用途并整理有依据的清理候选"
+  default_prompt: "使用 $orion-space-audit 分析我指定的磁盘或目录，找出主要占用并给出有依据的清理建议。"
