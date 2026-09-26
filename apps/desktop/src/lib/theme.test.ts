@@ -4,8 +4,8 @@ import { applyTheme, readThemePreference, saveThemePreference } from './theme';
 afterEach(() => vi.unstubAllGlobals());
 
 describe('theme preferences', () => {
-  it('restores saved choices and falls back to system for missing or invalid values', () => {
-    for (const [saved, expected] of [[null, 'system'], ['invalid', 'system'], ['system', 'system'], ['dark', 'dark'], ['light', 'light']]) {
+  it('restores saved choices and falls back to dark for missing or invalid values', () => {
+    for (const [saved, expected] of [[null, 'dark'], ['invalid', 'dark'], ['system', 'system'], ['dark', 'dark'], ['light', 'light']]) {
       vi.stubGlobal('localStorage', { getItem: () => saved });
       expect(readThemePreference()).toBe(expected);
     }
@@ -23,7 +23,7 @@ describe('theme preferences', () => {
       getItem: () => { throw new Error('blocked'); },
       setItem: () => { throw new Error('full'); },
     });
-    expect(readThemePreference()).toBe('system');
+    expect(readThemePreference()).toBe('dark');
     expect(() => saveThemePreference('dark')).not.toThrow();
   });
 

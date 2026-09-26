@@ -9,9 +9,9 @@ const systemQuery = '(prefers-color-scheme: dark)';
 export function readThemePreference(): ThemePreference {
   try {
     const saved = localStorage.getItem(storageKey);
-    if (saved === 'light' || saved === 'dark') return saved;
-  } catch { /* Storage can be unavailable; system mode still works. */ }
-  return 'system';
+    if (saved === 'system' || saved === 'light' || saved === 'dark') return saved;
+  } catch { /* Storage can be unavailable; use the default dark theme. */ }
+  return 'dark';
 }
 
 export function saveThemePreference(preference: ThemePreference) {
