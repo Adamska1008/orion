@@ -4,7 +4,7 @@
 
 Windows 优先的只读磁盘空间浏览器。独立 Rust Server 负责扫描与查询，Tauri / React 客户端负责桌面交互。
 
-![Orion 暗色界面：上方为列表视图，下方为三层嵌套空间图](docs/images/orion-overview-dark.jpg)
+![Orion 暗色界面：上方为列表视图，下方为三层嵌套空间图](docs/images/orion-overview-dark.png)
 
 - **两种视图：** 在按大小排序的文件列表与嵌套矩形空间图之间切换，空间图支持 1–4 层深度调节。
 - **高速扫描：** Rust 扫描引擎结合并行目录遍历、枚举元数据复用和批量索引更新，减少扫描开销。
@@ -87,5 +87,3 @@ cargo build --locked --release -p orion-server -p orion-desktop --features orion
 - `apps/desktop`：React UI 与 Tauri 桌面集成。
 - `contracts/api-v1.json`：由 Rust 与 TypeScript 共同校验的 API 响应样本。
 - `docs/`：公开文档，目前包含 [API 使用说明](docs/API.md) 和 [英文版 README](docs/README_EN.md)。
-
-内部开发文档（产品草案、任务计划、架构与技术选型、评审记录、benchmark 报告）统一放在 `.local/docs/`，由 `.gitignore` 排除。新克隆或 worktree 不会自动包含这些本地资料，需要时单独复制。

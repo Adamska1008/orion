@@ -4,7 +4,7 @@
 
 A read-only disk space explorer built primarily for Windows. A standalone Rust server handles scanning and queries, while a Tauri / React client provides the desktop interface.
 
-![Orion in dark mode: list view above and a three-level nested treemap below](images/orion-overview-dark.jpg)
+![Orion in dark mode: list view above and a three-level nested treemap below](images/orion-overview-dark.png)
 
 - **Two ways to explore:** switch between a size-sorted file list and a nested treemap with adjustable depth (1–4 levels).
 - **Fast scanning:** a Rust scanner combines parallel directory traversal, reused enumeration metadata, and batched index updates to reduce scanning overhead.
@@ -87,5 +87,3 @@ The scanner reuses metadata supplied by Windows directory enumeration by default
 - `apps/desktop`: React UI and Tauri desktop integration.
 - `contracts/api-v1.json`: API response fixtures validated by both Rust and TypeScript.
 - `docs/`: public documentation, including the [API guide](API.md) and [Chinese README](../README.md).
-
-Internal development documents (product drafts, task plans, architecture and technology decisions, reviews, and benchmark reports) are kept in `.local/docs/`, which is excluded by `.gitignore`. New clones and worktrees do not include these local materials automatically; copy them separately when needed.
