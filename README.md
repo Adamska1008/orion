@@ -61,7 +61,28 @@ npm run build
 
 生成包含前端资源的本机调试程序：先 `npm run build`，再 `cargo build -p orion-server -p orion-desktop --features orion-desktop/custom-protocol`。开发热更新使用前述 `npm run desktop`。生命周期集成测试使用隔离临时目录和临时端口，不操作正在使用的 Orion。
 
-## Release 试用
+## 构建 Windows 安装包
+
+在 Windows 上安装前述开发依赖后，于项目根目录执行：
+
+```powershell
+npm ci
+npm run build:setup
+```
+
+该命令构建 Windows x64 版本的 Server、前端和 Desktop，再生成包含两个程序的 NSIS 安装包：
+
+```text
+target/x86_64-pc-windows-msvc/release/bundle/nsis/Orion_0.1.0_x64-setup.exe
+```
+
+安装包支持简体中文和英文，可选择“仅当前用户”或“所有用户”，并提供快捷方式和 Windows 卸载入口。开始菜单快捷方式可选，默认不勾选。安装器会请求管理员权限，包括选择仅当前用户安装时。缺少 WebView2 时会联网下载并安装；首次构建也需要联网下载打包工具。安装后打开 Orion 即可自动启动后台，无需安装 Rust 或 Node.js。
+
+升级或卸载前，请从系统托盘选择“退出 Orion”。安装器发现目标目录中的 Desktop 或 Server 文件被占用时会停止并提示重试，不会主动终止扫描。独立启动的后台需先正常停止。卸载不会删除扫描过的文件；运行数据与日志和安装目录分开存放。
+
+构建配置位于 `apps/desktop/src-tauri/tauri.setup.conf.json`，由脚本自动加载；生成的辅助程序不提交到 Git。安装包尚未配置代码签名，Windows 可能提示发布者未知。
+
+## 构建便携版
 
 在项目根目录运行 `npm run build`，然后执行：
 
@@ -69,7 +90,7 @@ npm run build
 cargo build --locked --release -p orion-server -p orion-desktop --features orion-desktop/custom-protocol
 ```
 
-产物是 `target/release/orion-server.exe` 和 `target/release/orion-desktop.exe`。两者放在同一目录，双击 `orion-desktop.exe` 即可，后端会自动启动且不弹出控制台。界面资源已嵌入，不需要 Vite 开发服务；目前是便携版，仍需系统具备 WebView2。
+产物是 `target/release/orion-server.exe` 和 `target/release/orion-desktop.exe`。两者放在同一目录，双击 `orion-desktop.exe` 即可，后端会自动启动且不弹出控制台。界面资源已嵌入，不需要 Vite 开发服务；便携版仍需系统具备 WebView2。
 
 升级前先从托盘退出旧版；没有托盘的旧版需关闭客户端，并在旧 Server 终端按 Ctrl+C。然后双击新版桌面程序，或运行：
 

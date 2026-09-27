@@ -7,6 +7,7 @@
     "dev": "npm run dev --workspace @orion/desktop",
     "desktop": "npm run tauri --workspace @orion/desktop -- dev",
     "build": "npm run build --workspace @orion/desktop",
+    "build:setup": "node scripts/build-setup.mjs",
     "test": "npm run test --workspace @orion/desktop",
     "check": "npm run check --workspace @orion/desktop"
   }

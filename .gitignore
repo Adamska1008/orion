@@ -10,4 +10,5 @@
 *.log
 *.tsbuildinfo
 /apps/desktop/src-tauri/gen/
+/apps/desktop/src-tauri/binaries/
 /releases/

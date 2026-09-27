@@ -61,7 +61,28 @@ npm run build
 
 To build native debug executables with embedded frontend assets, run `npm run build`, followed by `cargo build -p orion-server -p orion-desktop --features orion-desktop/custom-protocol`. For development hot reload, use `npm run desktop` as described above. Lifecycle integration tests use isolated temporary directories and ports without touching a running Orion instance.
 
-## Trying a release build
+## Building the Windows installer
+
+On Windows, install the development prerequisites above, then run from the repository root:
+
+```powershell
+npm ci
+npm run build:setup
+```
+
+This builds the Windows x64 Server, frontend, and Desktop, then produces an NSIS installer containing both executables:
+
+```text
+target/x86_64-pc-windows-msvc/release/bundle/nsis/Orion_0.1.0_x64-setup.exe
+```
+
+The installer supports Simplified Chinese and English, lets you choose the current user or all users, and provides shortcuts and a Windows uninstall entry. The Start Menu shortcut is optional and unchecked by default. The installer requests administrator privileges even when installing for the current user only. It downloads and installs WebView2 if missing; the first build also needs internet access to download packaging tools. After installation, opening Orion starts the backend automatically. End users do not need Rust or Node.js.
+
+Before upgrading or uninstalling, choose **Exit Orion** from the system tray. If the installed Desktop or Server executable is in use, setup stops and asks you to retry without terminating the scan. Stop independently launched backends gracefully first. Uninstalling does not delete scanned files; runtime data and logs are stored separately from the installation directory.
+
+The script automatically loads `apps/desktop/src-tauri/tauri.setup.conf.json`. Generated sidecar binaries are excluded from Git. Code signing is not configured yet, so Windows may show an unknown-publisher prompt.
+
+## Building the portable version
 
 Run `npm run build` from the repository root, then:
 
@@ -69,7 +90,7 @@ Run `npm run build` from the repository root, then:
 cargo build --locked --release -p orion-server -p orion-desktop --features orion-desktop/custom-protocol
 ```
 
-This produces `target/release/orion-server.exe` and `target/release/orion-desktop.exe`. Keep both in the same directory and double-click `orion-desktop.exe`. The backend starts automatically without opening a console window. Frontend assets are embedded, so no Vite development server is required. The current build is portable and still requires WebView2 on the system.
+This produces `target/release/orion-server.exe` and `target/release/orion-desktop.exe`. Keep both in the same directory and double-click `orion-desktop.exe`. The backend starts automatically without opening a console window. Frontend assets are embedded, so no Vite development server is required. The portable version requires WebView2 on the system.
 
 Before upgrading, exit the old version from its tray menu. For older versions without a tray icon, close the client and press Ctrl+C in the old server's terminal. Then double-click the new desktop executable, or run:
 
